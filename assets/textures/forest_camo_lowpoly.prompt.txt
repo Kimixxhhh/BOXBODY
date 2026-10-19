@@ -1,0 +1,10 @@
+Generator: built-in image_gen (imagegen skill)
+Type: original bitmap game texture
+
+Use case: stylized-concept.
+Asset type: original woodland camouflage base-color texture for low-poly 3D game assets.
+Primary request: Create one square, full-bleed flat forest camouflage texture, designed for seamless repeating horizontally and vertically. This is a usable albedo pattern image, not a scene or a rendered material preview.
+Style: bold irregular angular polygon patches, crisp straight edges and a few chamfered corners, medium-to-large interlocking asymmetrical patches with some smaller accents. The silhouette language should suit low-poly game cars and props. Avoid a regular triangular tessellation; make connected angular woodland camo shapes. Balanced distribution across the entire tile, no central focal point, no recognizable objects.
+Color palette: only four solid base colors: deep forest green #344D38, muted olive green #788056, earthy brown #66533E, dark charcoal green #242D26. Green colors should occupy most of the area, with brown and charcoal as contrasting patches. Flat solid-color fills.
+Composition: orthographic 2D texture sheet filling every pixel, square 1:1, aim for 2048 x 2048 pixels. Opposing edges should match naturally for repeat tiling, with patches continuing across tile boundaries. No borders, no margins, no sample swatches or text.
+Avoid: gradients, simulated 3D facet lighting, highlights, shadows, bevels, outlines, fabric weave, scratches, grain, noise, photographic detail, leaves, trees, vehicles, guns, logos, labels, watermark, panels, texture sphere, mockup. Opaque image, no transparency.

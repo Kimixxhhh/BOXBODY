@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>WeaponWorkbench</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../scripts/Weapons/*.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../../scripts/Items/*.cs" Link="Shared/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

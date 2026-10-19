@@ -1,0 +1,52 @@
+{
+  "asset": "D:\\workspace\\projectBoxBody\\project\\assets\\characters\\militia.glb",
+  "backup": "D:\\workspace\\projectBoxBody\\project\\CharacterStudy\\militia\\backups\\militia_before_color_20261018_161929_320407.glb",
+  "original_sha256": "0a765ac2ecd9efe9696f7e8afad077001f3cb7771f74bc27da0af3cd40fef5be",
+  "updated_sha256": "c492196afb7f255601c7e7696e0fd4b028c5756c222096da8dd1d87d0b504d9c",
+  "texture": "D:\\workspace\\projectBoxBody\\project\\assets\\textures\\forest_camo_lowpoly.png",
+  "geometry_unchanged": false,
+  "materials": [
+    {
+      "node": "armLeft.008",
+      "material": "ForestCamouflage"
+    },
+    {
+      "node": "armRight.004",
+      "material": "ForestCamouflage"
+    },
+    {
+      "node": "body.002",
+      "material": "ForestCamouflage"
+    },
+    {
+      "node": "handLeft.009",
+      "material": "ForestCamouflage + Skin"
+    },
+    {
+      "node": "handRight.005",
+      "material": "ForestCamouflage + Skin"
+    },
+    {
+      "node": "hat.003",
+      "material": "ForestCamouflage"
+    },
+    {
+      "node": "head.001",
+      "material": "Skin"
+    },
+    {
+      "node": "ShoeLeft.007",
+      "material": "BlackBoots"
+    },
+    {
+      "node": "ShoeRight.006",
+      "material": "BlackBoots"
+    }
+  ],
+  "skin_srgb": "#DCA27D",
+  "boots_srgb": "#141819",
+  "embedded_texture": true,
+  "latest_backup": "D:\\workspace\\projectBoxBody\\project\\CharacterStudy\\militia\\backups\\militia_before_exposed_hands_20261018_162751_940197.glb",
+  "silhouette_unchanged": true,
+  "hand_tip_fraction": 0.23
+}

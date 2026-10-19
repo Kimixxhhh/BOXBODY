@@ -1,0 +1,22 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/PlayerController.cs" id="1"]
+[ext_resource type="PackedScene" path="res://assets/characters/Millitia.glb" id="2"]
+
+[sub_resource type="CapsuleShape3D" id="Capsule"]
+radius = 0.34
+height = 1.65
+
+[node name="Player" type="CharacterBody3D"]
+script = ExtResource("1")
+collision_layer = 2
+collision_mask = 1
+floor_snap_length = 0.2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.825, 0)
+shape = SubResource("Capsule")
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="Millitia" parent="Visual" instance=ExtResource("2")]

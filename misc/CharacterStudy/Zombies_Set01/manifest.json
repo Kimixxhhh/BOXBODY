@@ -1,0 +1,137 @@
+{
+  "palette": {
+    "skin": "#84976B",
+    "pale": "#A1AD83",
+    "teal": "#566D72",
+    "rust": "#B0784D",
+    "wine": "#81585D",
+    "olive": "#6F7350",
+    "ochre": "#CEAC55",
+    "dark": "#2D3635",
+    "bone": "#DDD7B5"
+  },
+  "models": [
+    {
+      "id": "zombie_shambler",
+      "name": "普通僵尸",
+      "subtitle": "破旧蓝衫 / 歪头前伸",
+      "file": "models/zombie_shambler.glb",
+      "triangles": 291,
+      "materials": 4,
+      "meshes": 8,
+      "groups": [
+        "body",
+        "head",
+        "armLeft",
+        "handLeft",
+        "armRight",
+        "handRight",
+        "ShoeLeft",
+        "ShoeRight"
+      ],
+      "palette": [
+        "dark",
+        "teal",
+        "skin",
+        "bone"
+      ],
+      "dimensions": [
+        1.162,
+        1.646,
+        0.901
+      ]
+    },
+    {
+      "id": "zombie_worker",
+      "name": "工人僵尸",
+      "subtitle": "安全帽 / 反光背心",
+      "file": "models/zombie_worker.glb",
+      "triangles": 297,
+      "materials": 5,
+      "meshes": 9,
+      "groups": [
+        "body",
+        "head",
+        "hat",
+        "armLeft",
+        "handLeft",
+        "armRight",
+        "handRight",
+        "ShoeLeft",
+        "ShoeRight"
+      ],
+      "palette": [
+        "dark",
+        "rust",
+        "skin",
+        "bone",
+        "ochre"
+      ],
+      "dimensions": [
+        1.174,
+        1.812,
+        0.888
+      ]
+    },
+    {
+      "id": "zombie_runner",
+      "name": "狂奔僵尸",
+      "subtitle": "瘦长轮廓 / 绷带头部",
+      "file": "models/zombie_runner.glb",
+      "triangles": 337,
+      "materials": 4,
+      "meshes": 8,
+      "groups": [
+        "body",
+        "head",
+        "armLeft",
+        "handLeft",
+        "armRight",
+        "handRight",
+        "ShoeLeft",
+        "ShoeRight"
+      ],
+      "palette": [
+        "dark",
+        "wine",
+        "pale",
+        "bone"
+      ],
+      "dimensions": [
+        1.031,
+        1.569,
+        1.148
+      ]
+    },
+    {
+      "id": "zombie_brute",
+      "name": "壮硕僵尸",
+      "subtitle": "宽肩厚臂 / 大型拳头",
+      "file": "models/zombie_brute.glb",
+      "triangles": 284,
+      "materials": 4,
+      "meshes": 8,
+      "groups": [
+        "body",
+        "head",
+        "armLeft",
+        "handLeft",
+        "armRight",
+        "handRight",
+        "ShoeLeft",
+        "ShoeRight"
+      ],
+      "palette": [
+        "dark",
+        "olive",
+        "skin",
+        "bone"
+      ],
+      "dimensions": [
+        1.763,
+        1.917,
+        1.046
+      ]
+    }
+  ]
+}

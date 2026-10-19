@@ -1,0 +1,69 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/Prototype.cs" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/WeaponCrate.tscn" id="3"]
+[ext_resource type="Script" path="res://scripts/FollowCamera.cs" id="4"]
+[ext_resource type="Script" path="res://scripts/CrateOutline.cs" id="5"]
+[ext_resource type="PackedScene" path="res://scenes/InteractionUi.tscn" id="6"]
+
+[sub_resource type="StandardMaterial3D" id="White"]
+albedo_color = Color(1, 1, 1, 1)
+roughness = 1.0
+
+[sub_resource type="PlaneMesh" id="GroundMesh"]
+material = SubResource("White")
+size = Vector2(2000, 2000)
+
+[sub_resource type="WorldBoundaryShape3D" id="GroundCollision"]
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 1
+background_color = Color(0.92, 0.93, 0.94, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.93, 0.96, 1, 1)
+ambient_light_energy = 0.35
+reflected_light_source = 1
+tonemap_mode = 0
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-55, -30, 0)
+light_color = Color(1, 0.98, 0.94, 1)
+light_energy = 0.2
+shadow_enabled = true
+directional_shadow_max_distance = 45.0
+
+[node name="Ground" type="StaticBody3D" parent="."]
+collision_layer = 1
+collision_mask = 2
+
+[node name="Mesh" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("GroundMesh")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
+shape = SubResource("GroundCollision")
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector3(-2, 0.02, 1)
+
+[node name="WeaponCrate" parent="." instance=ExtResource("3")]
+position = Vector3(1.5, 0, 0)
+
+[node name="Camera" type="Camera3D" parent="."]
+projection = 1
+size = 11.0
+near = 0.1
+far = 150.0
+current = true
+script = ExtResource("4")
+
+[node name="CrateOutline" type="Node" parent="."]
+script = ExtResource("5")
+
+[node name="UI" parent="." instance=ExtResource("6")]

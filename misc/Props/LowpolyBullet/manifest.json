@@ -1,0 +1,46 @@
+[
+  {
+    "file": "bullet_ak.glb",
+    "triangles": 518,
+    "meshes": 3,
+    "materials": 3,
+    "dimensions_metres": [
+      0.0124,
+      0.0124,
+      0.06
+    ]
+  },
+  {
+    "file": "bullet_projectile.glb",
+    "triangles": 118,
+    "meshes": 1,
+    "materials": 1,
+    "dimensions_metres": [
+      0.0079,
+      0.0079,
+      0.026
+    ]
+  },
+  {
+    "file": "bullet_casing.glb",
+    "triangles": 400,
+    "meshes": 2,
+    "materials": 2,
+    "dimensions_metres": [
+      0.0124,
+      0.0124,
+      0.038
+    ]
+  },
+  {
+    "file": "bullet_ak_triple.glb",
+    "triangles": 1554,
+    "meshes": 9,
+    "materials": 3,
+    "dimensions_metres": [
+      0.06,
+      0.0124,
+      0.0444
+    ]
+  }
+]

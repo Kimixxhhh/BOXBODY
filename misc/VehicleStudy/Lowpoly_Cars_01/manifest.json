@@ -1,0 +1,124 @@
+{
+  "palette": {
+    "charcoal": "#29363b",
+    "glass": "#729a9d",
+    "ivory": "#e8debd",
+    "terracotta": "#bf6b54",
+    "sage": "#81967b",
+    "ochre": "#cca454",
+    "slate": "#667f92"
+  },
+  "models": [
+    {
+      "id": "sedan",
+      "name": "SEDAN",
+      "subtitle": "四门轿车 / 陶土红",
+      "triangles": 1348,
+      "materials": 4,
+      "parts": 87,
+      "palette": [
+        "terracotta",
+        "charcoal",
+        "glass",
+        "ivory"
+      ],
+      "vertices": 2568,
+      "file": "models/sedan.glb",
+      "wheelGroups": [
+        "Wheel_Rear_Left",
+        "Wheel_Rear_Right",
+        "Wheel_Front_Left",
+        "Wheel_Front_Right"
+      ],
+      "dimensions": [
+        2.175,
+        1.57,
+        4.428
+      ]
+    },
+    {
+      "id": "hatchback",
+      "name": "HATCHBACK",
+      "subtitle": "短尾掀背车 / 鼠尾草绿",
+      "triangles": 1330,
+      "materials": 5,
+      "parts": 85,
+      "palette": [
+        "sage",
+        "charcoal",
+        "glass",
+        "ivory",
+        "terracotta"
+      ],
+      "vertices": 2530,
+      "file": "models/hatchback.glb",
+      "wheelGroups": [
+        "Wheel_Rear_Left",
+        "Wheel_Rear_Right",
+        "Wheel_Front_Left",
+        "Wheel_Front_Right"
+      ],
+      "dimensions": [
+        2.065,
+        1.643,
+        3.688
+      ]
+    },
+    {
+      "id": "pickup",
+      "name": "PICKUP",
+      "subtitle": "开放货斗皮卡 / 沙黄色",
+      "triangles": 1468,
+      "materials": 5,
+      "parts": 94,
+      "palette": [
+        "ochre",
+        "charcoal",
+        "glass",
+        "ivory",
+        "terracotta"
+      ],
+      "vertices": 2816,
+      "file": "models/pickup.glb",
+      "wheelGroups": [
+        "Wheel_Rear_Left",
+        "Wheel_Rear_Right",
+        "Wheel_Front_Left",
+        "Wheel_Front_Right"
+      ],
+      "dimensions": [
+        2.285,
+        1.85,
+        4.867
+      ]
+    },
+    {
+      "id": "van",
+      "name": "VAN",
+      "subtitle": "高顶厢式货车 / 灰蓝色",
+      "triangles": 1366,
+      "materials": 5,
+      "parts": 87,
+      "palette": [
+        "slate",
+        "charcoal",
+        "glass",
+        "ivory",
+        "terracotta"
+      ],
+      "vertices": 2600,
+      "file": "models/van.glb",
+      "wheelGroups": [
+        "Wheel_Rear_Left",
+        "Wheel_Rear_Right",
+        "Wheel_Front_Left",
+        "Wheel_Front_Right"
+      ],
+      "dimensions": [
+        2.255,
+        2.182,
+        4.527
+      ]
+    }
+  ]
+}

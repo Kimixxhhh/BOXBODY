@@ -1,0 +1,9 @@
+.godot/
+.vs/
+bin/
+obj/
+*.user
+artifacts/
+data/*.bak
+data/*.lock
+data/*.tmp

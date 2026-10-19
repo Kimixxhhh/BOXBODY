@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 4,
+  "weapons": [
+    {
+      "id": "ak47",
+      "name": "AK-47",
+      "category": "突击步枪",
+      "scenePath": "res://scenes/weapons/AK47.tscn",
+      "gunshotSoundPath": "",
+      "reloadSounds": [],
+      "stats": {
+        "ammoType": "Medium",
+        "price": 2500,
+        "damage": 30,
+        "enemySlowPercent": 20,
+        "knockbackSpeed": 0,
+        "fireCooldown": 0.1,
+        "fireMode": "Automatic",
+        "magazineCapacity": 30,
+        "reloadDuration": 2.65,
+        "movementInertiaPercent": 10,
+        "turnFollowSpeed": 10,
+        "projectileSpeed": 100,
+        "spreadMax": 8,
+        "spreadMin": 1,
+        "spreadPerShot": 0.5,
+        "spreadRecovery": 4
+      }
+    }
+  ]
+}

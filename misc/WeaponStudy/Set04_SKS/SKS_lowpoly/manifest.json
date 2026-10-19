@@ -1,0 +1,26 @@
+{
+  "palette": {
+    "charcoal": "#283238",
+    "steel": "#626e70",
+    "wood": "#ad7046",
+    "darkwood": "#694b37"
+  },
+  "models": [
+    {
+      "id": "sks",
+      "name": "SKS",
+      "subtitle": "长木托 / 固定弹仓 / 折叠刺刀",
+      "triangles": 1302,
+      "materials": 4,
+      "parts": 61,
+      "palette": [
+        "darkwood",
+        "wood",
+        "charcoal",
+        "steel"
+      ],
+      "vertices": 2842,
+      "file": "models/sks.glb"
+    }
+  ]
+}

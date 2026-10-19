@@ -1,0 +1,60 @@
+{
+  "palette": {
+    "charcoal": "#283238",
+    "steel": "#626e70",
+    "wood": "#ad7046",
+    "darkwood": "#694b37",
+    "olive": "#737953"
+  },
+  "models": [
+    {
+      "id": "ak47",
+      "name": "AK–47",
+      "subtitle": "弯弹匣 / 木质枪托",
+      "triangles": 564,
+      "materials": 4,
+      "parts": 32,
+      "palette": [
+        "wood",
+        "charcoal",
+        "steel",
+        "darkwood"
+      ],
+      "vertices": 1234,
+      "file": "models/ak47.glb"
+    },
+    {
+      "id": "m870",
+      "name": "M870",
+      "subtitle": "泵动霰弹枪 / 木质护木",
+      "triangles": 584,
+      "materials": 4,
+      "parts": 27,
+      "palette": [
+        "wood",
+        "charcoal",
+        "steel",
+        "darkwood"
+      ],
+      "vertices": 1158,
+      "file": "models/m870.glb"
+    },
+    {
+      "id": "rpg7",
+      "name": "RPG–7",
+      "subtitle": "棱面弹头 / 喇叭尾口",
+      "triangles": 736,
+      "materials": 5,
+      "parts": 27,
+      "palette": [
+        "charcoal",
+        "wood",
+        "steel",
+        "olive",
+        "darkwood"
+      ],
+      "vertices": 1430,
+      "file": "models/rpg7.glb"
+    }
+  ]
+}

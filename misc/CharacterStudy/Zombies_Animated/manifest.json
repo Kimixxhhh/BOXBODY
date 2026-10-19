@@ -1,0 +1,44 @@
+{
+  "models": [
+    {
+      "id": "zombie_normal",
+      "label": "普通僵尸",
+      "file": "models/zombie_normal.glb",
+      "walk_duration": 1.4,
+      "attack_duration": 1.0,
+      "impact_time": 0.43,
+      "source_sha256": "576f91cf32ff451a174e4344836bd7dfcf91e0bdd0dbeae149b54de2dad5efad",
+      "triangles": 291
+    },
+    {
+      "id": "zombie_helmet",
+      "label": "工人僵尸",
+      "file": "models/zombie_helmet.glb",
+      "walk_duration": 1.25,
+      "attack_duration": 1.1,
+      "impact_time": 0.48,
+      "source_sha256": "87910ee2d8c54445cb4a9e76fe7848636b0fda1fbf73e91be321280844711cf5",
+      "triangles": 297
+    },
+    {
+      "id": "zombie_fast",
+      "label": "狂奔僵尸",
+      "file": "models/zombie_fast.glb",
+      "walk_duration": 0.7,
+      "attack_duration": 0.64,
+      "impact_time": 0.25,
+      "source_sha256": "ba34e89970d026324d1a0b1b32fb9382c3d6ceab279e4dcc8f0d29f1f8cc61ca",
+      "triangles": 337
+    },
+    {
+      "id": "zombie_strong",
+      "label": "壮硕僵尸",
+      "file": "models/zombie_strong.glb",
+      "walk_duration": 1.65,
+      "attack_duration": 1.45,
+      "impact_time": 0.7,
+      "source_sha256": "9a2d12d47e96f50e296358f5b31bbaa417e0bb6b7dabcfe4b8a78e1f1d879737",
+      "triangles": 284
+    }
+  ]
+}

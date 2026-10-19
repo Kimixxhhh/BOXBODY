@@ -1,0 +1,11 @@
+Generator: built-in image_gen (imagegen skill)
+Type: original bitmap game texture
+
+Use case: stylized-concept.
+Asset type: original sand/desert camouflage base-color texture for low-poly 3D game models.
+Primary request: Create one square, full-bleed flat desert camouflage pattern texture, in the same simple angular visual language as a low-poly woodland camo. Produce the actual 2D texture image, not a render or material preview.
+Style: crisp hard-edged, irregular, interconnected polygon patches with straight sides and some chamfered corners. Medium-to-large angular shapes with a small number of smaller accents. Clear recognizable camouflage silhouettes rather than a regular triangle mosaic or pixel grid. Uniform pattern scale and visual density across the entire image, no focal point.
+Color palette: exactly four flat solid base colors: light sand #E5D4AC, warm desert tan #C9AD7F, muted khaki beige #A78C63, subdued earth brown #80694C. Light sand and warm tan dominate; muted khaki and earth brown appear as smaller contrasting patches. No greens, no black, no orange saturation.
+Composition: square 1:1, aim for 2048 x 2048 pixels. Entire canvas filled with the pattern, no margins, no frames, no swatches. Designed as a repeatable texture with opposing edges matching and patches continuing across borders.
+Surface: perfectly uniform solid color inside each patch, clean flat albedo, no lighting baked in.
+Avoid: gradients, highlights, shadows, simulated 3D facets, grain, speckle, noise, fabric weave, scratches, folds, photorealism, landscape, dunes, trees, vehicles, people, weapons, logos, text, watermarks, multiple panels, mockup or sphere. Opaque background.

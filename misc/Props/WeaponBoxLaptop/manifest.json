@@ -1,0 +1,18 @@
+{
+  "triangles": 4804,
+  "dimensions_metres": [
+    1.64,
+    1.3046,
+    0.943
+  ],
+  "groups": [
+    "Crate_Body",
+    "Crate_Lid",
+    "Laptop_Base",
+    "Laptop_Screen"
+  ],
+  "materials": 13,
+  "texture": "embedded 1024x1024 PNG",
+  "screen_opening_degrees": 105,
+  "validation": "PASS: GLB structure, indices, normals, winding, UVs, embedded PNG and ground origin"
+}

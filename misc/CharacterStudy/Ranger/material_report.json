@@ -1,0 +1,58 @@
+{
+  "asset": "D:\\workspace\\projectBoxBody\\project\\assets\\characters\\Ranger.glb",
+  "backup": "D:\\workspace\\projectBoxBody\\project\\CharacterStudy\\Ranger\\backups\\Ranger_before_desert_20261018_164541_224429.glb",
+  "texture": "D:\\workspace\\projectBoxBody\\project\\assets\\textures\\desert_camo_lowpoly.png",
+  "embedded_texture": true,
+  "mesh_count": 9,
+  "triangles": 174,
+  "geometry_uv_and_transforms_unchanged": true,
+  "skin_and_boot_materials_unchanged": true,
+  "original_sha256": "99a24bc54462b3204ced812883a348cc51c565a16f37f91a4664c492d45e1982",
+  "updated_sha256": "3716dde6e7b841f2ec65f8987ed8d06541b06b87d6eea0c0c829a1bf8f25fdae",
+  "materials": [
+    {
+      "part": "armLeft.008",
+      "material": "DesertCamouflage"
+    },
+    {
+      "part": "armRight.004",
+      "material": "DesertCamouflage"
+    },
+    {
+      "part": "body.002",
+      "material": "DesertCamouflage"
+    },
+    {
+      "part": "handLeft.009",
+      "material": "DesertCamouflage"
+    },
+    {
+      "part": "handLeft.009",
+      "material": "Skin"
+    },
+    {
+      "part": "handRight.005",
+      "material": "DesertCamouflage"
+    },
+    {
+      "part": "handRight.005",
+      "material": "Skin"
+    },
+    {
+      "part": "hat.003",
+      "material": "DesertCamouflage"
+    },
+    {
+      "part": "head.001",
+      "material": "Skin"
+    },
+    {
+      "part": "ShoeLeft.007",
+      "material": "BlackBoots"
+    },
+    {
+      "part": "ShoeRight.006",
+      "material": "BlackBoots"
+    }
+  ]
+}
