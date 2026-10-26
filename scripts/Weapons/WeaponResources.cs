@@ -8,6 +8,8 @@ public static class WeaponResources
 {
     public static string? PathError(string? path) => ResourcePathError(path, "武器场景", new[] { ".tscn", ".scn", ".glb", ".gltf" });
 
+    public static string? ItemScenePathError(string? path) => ResourcePathError(path, "物品场景", new[] { ".tscn", ".scn", ".glb", ".gltf" });
+
     public static string? SoundPathError(string? path, bool optional = false) => optional && path == "" ? null
         : ResourcePathError(path, "音效", new[] { ".wav", ".ogg", ".mp3" });
 
@@ -27,6 +29,14 @@ public static class WeaponResources
         string? error = PathError(path);
         if (error != null) return error;
         try { return File.Exists(Resolve(project, path)) ? null : "武器场景文件不存在。"; }
+        catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException) { return "无法访问资源文件。"; }
+    }
+
+    public static string? ItemSceneFileError(string project, string path)
+    {
+        string? error = ItemScenePathError(path);
+        if (error != null) return error;
+        try { return File.Exists(Resolve(project, path)) ? null : "物品场景文件不存在。"; }
         catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException) { return "无法访问资源文件。"; }
     }
 

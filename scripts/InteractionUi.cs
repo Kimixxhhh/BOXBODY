@@ -54,10 +54,21 @@ public partial class InteractionUi : CanvasLayer
             int index = Items.AddItem($"{item.Name}   ·   {item.TotalAmmo} 发     {item.Price}$");
             Items.SetItemTooltip(index, $"{item.Name}\n总弹药量：{item.TotalAmmo} 发\n剩余弹药量：{item.TotalAmmo} 发\n价格：{item.Price}$\n每份占用一个背包物品槽位");
         }
+        foreach (var throwable in catalog.Throwables)
+        {
+            int index = Items.AddItem($"{throwable.Name}   ·   每份 {throwable.SlotCapacity} 枚     {throwable.Price}$");
+            Items.SetItemTooltip(index,
+                $"{throwable.Name}\n价格：{throwable.Price}$ / 份\n每格数量：{throwable.SlotCapacity} 枚\n" +
+                $"伤害：{throwable.Damage:0.##}\n范围：{throwable.Range:0.##} 米\n" +
+                $"减速：{throwable.EnemySlowPercent:0.##}% / {throwable.SlowDuration:0.##} 秒\n" +
+                $"击退：{throwable.KnockbackSpeed:0.##} 米/秒\n引信：{throwable.FuseTime:0.##} 秒\n放入背包物品槽位；短按 G 拿出，长按 G 打开轮盘，左键投掷");
+        }
         if (Items.ItemCount > 0) Items.Select(0);
         _player.LoadoutChanged += Refresh;
         _player.InventoryChanged += Refresh;
+        _player.GrenadeStateChanged += Refresh;
         _player.ReloadFeedback += ShowFeedback;
+        _player.ThrowFeedback += ShowFeedback;
         Refresh();
     }
 
@@ -67,7 +78,9 @@ public partial class InteractionUi : CanvasLayer
         {
             _player.LoadoutChanged -= Refresh;
             _player.InventoryChanged -= Refresh;
+            _player.GrenadeStateChanged -= Refresh;
             _player.ReloadFeedback -= ShowFeedback;
+            _player.ThrowFeedback -= ShowFeedback;
         }
     }
 
@@ -92,6 +105,13 @@ public partial class InteractionUi : CanvasLayer
         return index >= 0 && index < ItemCatalog.Ammunition.Count ? ItemCatalog.Ammunition[index] : null;
     }
 
+    private ThrowableDefinition? SelectedThrowable()
+    {
+        var selected = Items.GetSelectedItems();
+        int index = selected.Length == 1 ? selected[0] - _catalog.Weapons.Count - ItemCatalog.Ammunition.Count : -1;
+        return index >= 0 && index < _catalog.Throwables.Count ? _catalog.Throwables[index] : null;
+    }
+
     private WeaponDefinition? SelectedWeapon()
     {
         var selected = Items.GetSelectedItems();
@@ -102,10 +122,30 @@ public partial class InteractionUi : CanvasLayer
     private void Refresh()
     {
         _hudMoney.Text = $"资金  {_player.Money}$";
-        if (_player.EquippedWeapon is { } held)
+        if (_player.IsGrenadeBusy)
+        {
+            _hudMoney.Text += _player.IsGrenadeReady
+                ? "\n手雷已就绪   ·   左键投掷"
+                : _player.IsGrenadeThrowing ? "\n正在投掷手雷…"
+                : _player.IsGrenadeStowing ? "\n正在收起手雷…"
+                : "\n正在收枪 / 拿出手雷…";
+        }
+        else if (_player.EquippedWeapon is { } held)
+        {
             _hudMoney.Text += $"\n{held.Name}  {_player.MagazineAmmo(_player.ActiveWeaponSlot)} / {held.Stats.MagazineCapacity}   ·   备弹 {_player.Backpack.Available(held.Stats.AmmoType)}";
+        }
+        if (!_player.IsGrenadeBusy && _player.Backpack.ThrowableAmount is int grenades && grenades > 0)
+            _hudMoney.Text += $"\n手雷 ×{grenades}   ·   G 短按拿出 / 长按选择";
         int occupied = _player.WeaponSlots.Count(w => w != null);
-        _wallet.Text = $"资金 {_player.Money}$   ·   武器 {occupied} / 2   ·   物品 {_player.Backpack.Count} / {AmmoBackpack.Capacity}";
+        _wallet.Text = $"资金 {_player.Money}$   ·   武器 {occupied} / 2   ·   物品 {_player.Backpack.Count} / {ItemBackpack.Capacity}";
+        if (SelectedThrowable() is { } throwable)
+        {
+            string? block = _player.PurchaseBlockReason(throwable);
+            BuyButton.Disabled = block != null;
+            BuyButton.Text = $"购买并放入背包  ·  {throwable.Price}$";
+            _status.Text = block ?? $"每份 {throwable.SlotCapacity} 枚 · 伤害 {throwable.Damage:0.##} · 范围 {throwable.Range:0.##} 米 · 减速 {throwable.EnemySlowPercent:0.##}% / {throwable.SlowDuration:0.##} 秒 · 引信 {throwable.FuseTime:0.##} 秒";
+            return;
+        }
         if (SelectedAmmo() is { } ammo)
         {
             string? block = _player.PurchaseBlockReason(ammo);
@@ -115,7 +155,7 @@ public partial class InteractionUi : CanvasLayer
             return;
         }
         var selected = SelectedWeapon();
-        string? reason = selected == null ? "请选择要购买的武器或弹药" : _player.PurchaseBlockReason(selected);
+        string? reason = selected == null ? "请选择要购买的武器、弹药或投掷物" : _player.PurchaseBlockReason(selected);
         BuyButton.Disabled = reason != null;
         BuyButton.Text = selected == null ? "购买并装备" : $"购买并装备  ·  {selected.Stats.Price}$";
         _status.Text = reason ?? $"购买后自动装备至武器槽位 {occupied + 1}";
@@ -124,7 +164,8 @@ public partial class InteractionUi : CanvasLayer
     private void PurchaseSelected()
     {
         string message;
-        if (SelectedAmmo() is { } ammo) _player.TryPurchaseAmmo(ammo.Id, out message);
+        if (SelectedThrowable() is { } throwable) _player.TryPurchaseThrowable(throwable.Id, out message);
+        else if (SelectedAmmo() is { } ammo) _player.TryPurchaseAmmo(ammo.Id, out message);
         else if (SelectedWeapon() is { } weapon) _player.TryPurchaseWeapon(weapon.Id, out message);
         else return;
         Refresh();

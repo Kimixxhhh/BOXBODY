@@ -10,9 +10,9 @@ public sealed class ReloadSoundSequence
     private ReloadSoundCue[] _cues = Array.Empty<ReloadSoundCue>();
     private int _next;
     private double _elapsed;
-    private readonly Action<string> _play;
+    private readonly Action<ReloadSoundCue> _play;
 
-    public ReloadSoundSequence(Action<string> play) => _play = play;
+    public ReloadSoundSequence(Action<ReloadSoundCue> play) => _play = play;
 
     public void Start(IEnumerable<ReloadSoundCue> cues)
     {
@@ -27,7 +27,7 @@ public sealed class ReloadSoundSequence
         if (!double.IsFinite(delta) || delta < 0) return;
         _elapsed += delta;
         while (_next < _cues.Length && _cues[_next].DelaySeconds <= _elapsed)
-            _play(_cues[_next++].SoundPath);
+            _play(_cues[_next++]);
     }
 
     public void Cancel()

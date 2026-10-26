@@ -30,6 +30,7 @@ internal sealed class WeaponScenePreview : Grid, IDisposable
     internal int SurfaceCount { get; private set; }
     internal Task Pending { get; private set; } = Task.CompletedTask;
     internal string Status => _status.Text;
+    internal string EmptyMessage { get; set; } = "请选择有效的武器场景";
 
     public WeaponScenePreview(string project)
     {
@@ -57,7 +58,7 @@ internal sealed class WeaponScenePreview : Grid, IDisposable
         _requested = scene; _cancel?.Cancel();
         LoadedScenePath = null; SurfaceCount = 0; _visual.Content = null;
         _status.Visibility = Visibility.Visible;
-        if (scene == null) { _status.Text = "请选择有效的武器场景"; Pending = Task.CompletedTask; return; }
+        if (scene == null) { _status.Text = EmptyMessage; Pending = Task.CompletedTask; return; }
         _status.Text = "正在加载 3D 模型…";
         _cancel = new CancellationTokenSource();
         Pending = LoadAsync(scene,_cancel.Token);

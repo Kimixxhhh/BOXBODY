@@ -120,6 +120,16 @@ public partial class CrateOutline : Node
         _crateMask.GlobalTransform = _crateSource.GlobalTransform;
         _playerMask.GlobalTransform = _playerSource.GlobalTransform;
         // Match each animated limb as well as the character root for correct occlusion.
-        foreach (var (source, mask) in _playerPose) mask.Transform = source.Transform;
+        // A prop can be replaced mid-switch; drop cached pairs that were freed.
+        for (int i = _playerPose.Count - 1; i >= 0; i--)
+        {
+            var (source, mask) = _playerPose[i];
+            if (!GodotObject.IsInstanceValid(source) || !GodotObject.IsInstanceValid(mask))
+            {
+                _playerPose.RemoveAt(i);
+                continue;
+            }
+            mask.Transform = source.Transform;
+        }
     }
 }

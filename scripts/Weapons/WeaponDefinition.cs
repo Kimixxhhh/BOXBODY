@@ -20,6 +20,8 @@ public sealed record WeaponStats
     public required FireMode FireMode { get; set; }
     public required int MagazineCapacity { get; set; }
     public double ReloadDuration { get; set; } = DefaultReloadDuration;
+    public double EquipDuration { get; set; } = 0.35;
+    public double HolsterDuration { get; set; } = 0.25;
     public required double MovementInertiaPercent { get; set; }
     public required double TurnFollowSpeed { get; set; }
     public required double ProjectileSpeed { get; set; }
@@ -50,6 +52,7 @@ public sealed record WeaponDefinition
     public required string Category { get; init; }
     public required string ScenePath { get; init; }
     public string GunshotSoundPath { get; init; } = "";
+    public double GunshotVolumePercent { get; init; } = 100;
     public List<ReloadSoundCue> ReloadSounds { get; init; } = new();
     public required WeaponStats Stats { get; set; }
 }
@@ -59,6 +62,7 @@ public sealed record ReloadSoundCue
 {
     public required string SoundPath { get; init; }
     public required double DelaySeconds { get; init; }
+    public double VolumePercent { get; init; } = 100;
 }
 
 public sealed record NumericWeaponField(string Key, string Label, string Unit, string Hint,
@@ -74,6 +78,8 @@ public static class WeaponFields
         new("fireCooldown", "开火后冷却时间", "秒", "两次开火的最短间隔；射速 = 60 ÷ 冷却时间。", .001, 3600, false, s => s.FireCooldown, (s,v) => s.FireCooldown = v),
         new("magazineCapacity", "弹夹容量", "发", "每个弹夹可装填的子弹数，必须为整数。", 1, 100000, true, s => s.MagazineCapacity, (s,v) => s.MagazineCapacity = (int)v),
         new("reloadDuration", "换弹时间", "秒", "越小换弹越快，整段动画同步变速；默认 2.65 秒。", .001, 3600, false, s => s.ReloadDuration, (s,v) => s.ReloadDuration = v),
+        new("equipDuration", "切枪 / 拿出武器时间", "秒", "从收起位置旋转到持枪姿势的时间；切换武器时使用新枪的该时长。", .001, 3600, false, s => s.EquipDuration, (s,v) => s.EquipDuration = v),
+        new("holsterDuration", "收回武器时间", "秒", "从持枪姿势旋转到收起位置的时间；切换武器时先按旧枪的该时长收起。", .001, 3600, false, s => s.HolsterDuration, (s,v) => s.HolsterDuration = v),
         new("movementInertiaPercent", "移动惯性", "%", "持有者移速降低比例；0 为原速，100 为无法移动。", 0, 100, false, s => s.MovementInertiaPercent, (s,v) => s.MovementInertiaPercent = v),
         new("turnFollowSpeed", "转动惯性", "系数", "1 − Exp(−delta × 系数)；值越大跟随越快，0 为不转向。", 0, 1000, false, s => s.TurnFollowSpeed, (s,v) => s.TurnFollowSpeed = v),
         new("projectileSpeed", "子弹飞行速度", "米/秒", "子弹沿发射方向前进的速度。", .001, 100000, false, s => s.ProjectileSpeed, (s,v) => s.ProjectileSpeed = v),

@@ -10,7 +10,9 @@ public partial class PrototypeSmokeTest : Node
     private Prototype _game = null!;
     private int _checks;
     private Node3D? _reloadRig;
+    private Node3D? _switchRig;
     private float _maximumReloadGripError;
+    private float _maximumSwitchGripError;
 
     public override async void _Ready()
     {
@@ -19,10 +21,38 @@ public partial class PrototypeSmokeTest : Node
             _game = GetParent<Prototype>();
             await Frames(12);
             VerifyAmmoBackpack();
+            if (OS.GetCmdlineUserArgs().Contains("--grenade-test"))
+            {
+                await VerifyGrenades();
+                GD.Print($"GRENADE PASS: {_checks} checks");
+                GetTree().Quit();
+                return;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--shooting-test"))
+            {
+                await VerifyShooting();
+                GD.Print($"SHOOTING PASS: {_checks} checks");
+                GetTree().Quit();
+                return;
+            }
             if (OS.GetCmdlineUserArgs().Contains("--reload-timing-test"))
             {
                 await VerifyReloadTiming();
                 GD.Print($"RELOAD TIMING PASS: {_checks} checks");
+                GetTree().Quit();
+                return;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--weapon-switch-test"))
+            {
+                await VerifyWeaponSwitch();
+                GD.Print($"WEAPON SWITCH PASS: {_checks} checks");
+                GetTree().Quit();
+                return;
+            }
+            if (OS.GetCmdlineUserArgs().Contains("--fnfal-test"))
+            {
+                await VerifyFnfal();
+                GD.Print($"FNFAL PASS: {_checks} checks");
                 GetTree().Quit();
                 return;
             }
@@ -54,11 +84,12 @@ public partial class PrototypeSmokeTest : Node
             Node3D rightArm = rig.GetNode<Node3D>("RightArmPivot");
             Node3D leftFoot = rig.GetNode<Node3D>("LeftFootPivot");
             Vector3 footRest = leftFoot.Position;
+            await VerifyUnarmedClearance(rig);
             await VerifyPurchases(rig);
             Check(rig.GetNode<Node3D>("HeldWeapon/Model").GetChildCount() > 0, "Purchased AK47 asset is equipped");
             Check(HandError(rig) < 0.025f, "Both palms meet the AK grip and handguard");
             Check(Mathf.IsEqualApprox(_game.Camera.Size, 11), "Camera has the wider requested view");
-            Check(_game.Ui.Items.ItemCount == _game.Weapons.Weapons.Count + ItemCatalog.Ammunition.Count, "Weapon shop lists weapons and ammunition");
+            Check(_game.Ui.Items.ItemCount == _game.Weapons.Weapons.Count + ItemCatalog.Ammunition.Count + _game.Weapons.Throwables.Count, "Weapon shop lists weapons, ammunition and throwables");
             await VerifyWeaponConfiguration();
             await VerifyInventory();
             PressKey(Key.E);
@@ -300,6 +331,14 @@ public partial class PrototypeSmokeTest : Node
         await Frames(3);
         Check(player.Money == 2500 && player.WeaponSlots[0] == weapon && player.WeaponSlots[1] == null && player.ActiveWeaponSlot == 0,
             "First UI purchase charges once and automatically equips slot one");
+        await WaitForWeaponSwitch();
+        PressKey(Key.Escape);
+        await Frames(2);
+        Check(player.CycleWeapon(1) && player.ActiveWeaponSlot == 0 && !player.IsSwitching,
+            "Wheel cycling with one equipped weapon skips the empty second slot");
+        PressKey(Key.E);
+        await Frames(2);
+        Check(_game.Ui.IsOpen, "Shop reopens for the remaining inventory checks");
         Check(rig.HasNode("HeldWeapon/Model") &&
             _game.Inventory.HasNode("Root/Layout/PrimaryWeapon/WeaponPreview") &&
             !_game.Inventory.HasNode("Root/Layout/SecondaryWeapon/WeaponPreview"), "First purchase updates character and only the first inventory preview");
@@ -307,6 +346,7 @@ public partial class PrototypeSmokeTest : Node
             _game.Inventory.GetNode<Label>("Root/Layout/Money").Text.Contains("2500$"), "HUD and inventory display the remaining balance");
         PressKey(Key.Tab);
         await Frames(3);
+        Check(!player.CycleWeapon(1), "Wheel weapon cycling is blocked while the backpack is open");
         await Screenshot("inventory-one-weapon.png");
         PressKey(Key.Tab);
         await Frames(2);
@@ -325,7 +365,7 @@ public partial class PrototypeSmokeTest : Node
         await Screenshot("ammunition-shop.png");
         _game.Ui.BuyButton.EmitSignal(Button.SignalName.Pressed);
         await Frames(3);
-        Check(player.Money == 2250 && player.Backpack.Count == 1 && player.Backpack.Slots[0] is { TotalAmmo: 40, RemainingAmmo: 40 },
+        Check(player.Money == 2250 && player.Backpack.Count == 1 && player.Backpack.Slots[0] is AmmoItem { TotalAmmo: 40, RemainingAmmo: 40 },
             "Buying medium ammunition charges 250 and creates a separate 40/40 item in the first small slot");
         Check(player.WeaponSlots[1] == null && player.ActiveWeaponSlot == 0,
             "Buying ammunition never occupies or changes the equipped weapon slots");
@@ -338,6 +378,7 @@ public partial class PrototypeSmokeTest : Node
         await Frames(3);
         Check(player.Money == 0 && player.WeaponSlots.All(w => w != null) && player.ActiveWeaponSlot == 1,
             "Exact remaining funds buy a second weapon into slot two");
+        await WaitForWeaponSwitch();
         Check(_game.Inventory.HasNode("Root/Layout/SecondaryWeapon/WeaponPreview"), "Second purchase creates the second slot preview");
         SelectShopItem(_game.Weapons.Weapons.Count);
         Check(_game.Ui.BuyButton.Disabled && !player.TryPurchaseAmmo(ItemCatalog.MediumAmmo.Id, out var noMoney) &&
@@ -355,11 +396,20 @@ public partial class PrototypeSmokeTest : Node
         Check(player.ActiveWeaponSlot == 1, "Shop blocks weapon switching");
         PressKey(Key.Escape);
         await Frames(2);
+        _switchRig = rig;
+        _maximumSwitchGripError = 0;
         PressKey(Key.Key1);
         await Frames(3);
+        Check(player.IsSwitching && !player.TryStartReload(out _),
+            "Holstering and drawing block reloading until the switch completes");
+        await WaitForWeaponSwitch();
+        Check(_maximumSwitchGripError < .025f,
+            $"Hands follow the rifle through holster and draw (max error {_maximumSwitchGripError * 100:F2} cm)");
+        _switchRig = null;
         Check(player.ActiveWeaponSlot == 0 && HandError(rig) < .025f, "Key one selects the first purchased weapon with valid hand targets");
         PressKey(Key.Key2);
         await Frames(3);
+        await WaitForWeaponSwitch();
         Check(player.ActiveWeaponSlot == 1 && rig.GetChildren().Count(n => n is Node3D && n.Name == "HeldWeapon") == 1,
             "Key two selects the second weapon without duplicating held props");
         Check(_game.GetNode<Node3D>("CrateOutline/SilhouetteMask/PlayerMask/Millitia").HasNode("HeldWeapon/Model"),
@@ -373,7 +423,8 @@ public partial class PrototypeSmokeTest : Node
 
     private async Task VerifyWeaponConfiguration()
     {
-        Check(_game.Weapons.Weapons.Count == 1 && _game.Player.EquippedWeapon?.Id == "ak47",
+        Check(_game.Weapons.Weapons.Count >= 1 && _game.Weapons.Weapons.Any(w => w.Id == "ak47") &&
+            _game.Player.EquippedWeapon?.Id == "ak47",
             "Game loads the shared weapon catalog and assigns AK properties");
         foreach (var weapon in _game.Weapons.Weapons)
             Check(ResourceLoader.Exists(weapon.ScenePath), $"Weapon scene loads: {weapon.Id}");
@@ -518,6 +569,7 @@ public partial class PrototypeSmokeTest : Node
             "Reload start reserves no ammunition and does not load rounds before the animation completes");
         PressKey(Key.Key1);
         await Frames(3);
+        await WaitForWeaponSwitch();
         Check(!_game.Player.IsReloading && _game.Player.MagazineAmmo(0) == 0 && _game.Player.MagazineAmmo(1) == 0 &&
             _game.Player.Backpack.Available(AmmoType.Medium) == 40, "Switching guns cancels reload without consuming or granting rounds");
         await Frames(165);
@@ -525,14 +577,20 @@ public partial class PrototypeSmokeTest : Node
             "Cancelled reload cannot complete later on the newly selected gun");
         PressKey(Key.Key2);
         await Frames(3);
+        await WaitForWeaponSwitch();
         Node3D magazine = rig.GetNode<Node3D>("HeldWeapon/MagazineMotion");
         Transform3D magazineRest = magazine.Transform;
+        Node3D held = rig.GetNode<Node3D>("HeldWeapon");
+        MeshInstance3D? chargingHandle = held.FindChildren("Trigger_10*", "MeshInstance3D", true, false)
+            .Cast<MeshInstance3D>().FirstOrDefault(p => p.Position.X > 0.01f);
+        Transform3D chargingHandleRest = chargingHandle?.Transform ?? Transform3D.Identity;
         Vector3 playerPosition = _game.Player.GlobalPosition;
         float cameraSize = _game.Camera.Size;
         if (DisplayServer.GetName() != "headless") _game.Camera.Size = 4;
         PressKey(Key.R);
         await Frames(8);
         Check(_game.Player.IsReloading, "R triggers the reload animation");
+        double uprightCheckpoint = _game.Player.ReloadDuration * (2.13 / 2.65);
         double elapsed = _game.Player.ReloadElapsed;
         PressKey(Key.R);
         await Frames(2);
@@ -550,7 +608,12 @@ public partial class PrototypeSmokeTest : Node
         Check(magazine.Position.DistanceTo(magazineRest.Origin) > 0.20f, "Magazine visibly leaves the rifle during reload");
         Check(HandError(rig, true) < 0.025f, "Right hand stays on the rifle during reload");
         await Screenshot("reload-02-magazine-out.png");
-        await ReloadUntil(1.6f);
+        await ReloadUntil(uprightCheckpoint);
+        // The old bolt pull peaked around 2.13 s of the authored 2.65 s timeline,
+        // where the rifle also tilted; both must be gone at that moment.
+        Check(held.Rotation.Length() < 0.0001f, "Reload keeps the rifle body upright instead of tilting it");
+        Check(chargingHandle != null && chargingHandle.Transform.IsEqualApprox(chargingHandleRest),
+            "Reload no longer pulls the charging handle");
         await Screenshot("reload-03-inserting.png");
         await ReloadUntil(2.13f);
         Check(magazine.Position.DistanceTo(magazineRest.Origin) < 0.002f, "Magazine seats back into the rifle");
@@ -559,7 +622,7 @@ public partial class PrototypeSmokeTest : Node
         Check(!_game.Player.IsReloading && magazine.Transform.IsEqualApprox(magazineRest), "Reload finishes and fully resets the magazine pose");
         Check(HandError(rig) < 0.025f, "Both hands return to their holding positions");
         Check(_game.Player.MagazineAmmo(1) == 30 && _game.Player.MagazineAmmo(0) == 0 &&
-            _game.Player.Backpack.Slots[0] is { TotalAmmo: 40, RemainingAmmo: 10 },
+            _game.Player.Backpack.Slots[0] is AmmoItem { TotalAmmo: 40, RemainingAmmo: 10 },
             "Reload fills only the active 30-round magazine and leaves a 10/40 ammunition item");
         Check(_game.Inventory.GetNode<Label>("Root/Layout/Storage/Slot01/AmmoAmount").Text == "10 / 40" &&
             _game.Inventory.GetNode<Label>("Root/Layout/SecondaryWeapon/MagazineAmmo").Text == "30 / 30",
@@ -576,6 +639,7 @@ public partial class PrototypeSmokeTest : Node
         await Frames(2);
         PressKey(Key.Key1);
         await Frames(3);
+        await WaitForWeaponSwitch();
         PressKey(Key.R);
         await Frames(2);
         Check(_game.Player.IsReloading, "The other empty magazine reloads using the remaining partial pack");
@@ -610,21 +674,22 @@ public partial class PrototypeSmokeTest : Node
 
     private void VerifyAmmoBackpack()
     {
-        var bag = new AmmoBackpack();
+        var bag = new ItemBackpack();
+        int Remaining(int slot) => ((AmmoItem)bag.Slots[slot]!).RemainingAmmo;
         var other = ItemCatalog.MediumAmmo with { Id = "test_other", AmmoType = (AmmoType)999 };
-        Check(bag.TryAdd(other) && bag.TryAdd(ItemCatalog.MediumAmmo) && bag.TryAdd(ItemCatalog.MediumAmmo),
+        Check(bag.TryAddAmmo(other) && bag.TryAddAmmo(ItemCatalog.MediumAmmo) && bag.TryAddAmmo(ItemCatalog.MediumAmmo),
             "Each ammunition purchase creates its own small-slot item");
         Check(!ReferenceEquals(bag.Slots[1], bag.Slots[2]), "Identical ammunition items keep independent remaining counts");
-        Check(bag.Take(AmmoType.Medium, 30) == 30 && bag.Slots[0]!.RemainingAmmo == 40 && bag.Slots[1]!.RemainingAmmo == 10,
+        Check(bag.Take(AmmoType.Medium, 30) == 30 && Remaining(0) == 40 && Remaining(1) == 10,
             "Reload skips incompatible ammunition and preserves the partly used pack");
-        Check(bag.Take(AmmoType.Medium, 25) == 25 && bag.Slots[1] == null && bag.Slots[2]!.RemainingAmmo == 25 && bag.Count == 2,
+        Check(bag.Take(AmmoType.Medium, 25) == 25 && bag.Slots[1] == null && Remaining(2) == 25 && bag.Count == 2,
             "One reload spans matching packs, takes only missing rounds and frees exhausted slots");
-        Check(bag.TryAdd(ItemCatalog.MediumAmmo) && bag.Slots[1] is { RemainingAmmo: 40 }, "New ammunition reuses the first freed slot");
+        Check(bag.TryAddAmmo(ItemCatalog.MediumAmmo) && bag.Slots[1] is AmmoItem { RemainingAmmo: 40 }, "New ammunition reuses the first freed slot");
         Check(bag.Take(AmmoType.Medium, 100) == 65 && bag.Available(AmmoType.Medium) == 0 && bag.Count == 1,
             "Ammunition shortage transfers only the actual reserve without consuming a different type");
-        Check(bag.Take(AmmoType.Medium, 30) == 0 && bag.Slots[0]!.RemainingAmmo == 40,
+        Check(bag.Take(AmmoType.Medium, 30) == 0 && Remaining(0) == 40,
             "A backpack containing only incompatible ammo cannot supply the weapon");
-        Check(bag.Take((AmmoType)999, 0) == 0 && bag.Slots[0]!.RemainingAmmo == 40,
+        Check(bag.Take((AmmoType)999, 0) == 0 && Remaining(0) == 40,
             "A full magazine requesting zero rounds leaves all items untouched");
     }
 
@@ -645,10 +710,10 @@ public partial class PrototypeSmokeTest : Node
         player.GlobalPosition = new Vector3(-10, .02f, 0);
         Check(!player.TryPurchaseAmmo(id, out _) && player.Money == 5000, "Ammunition purchase rechecks crate reach");
         player.GlobalPosition = near;
-        for (int i = 0; i < AmmoBackpack.Capacity; i++) _game.Ui.BuyButton.EmitSignal(Button.SignalName.Pressed);
+        for (int i = 0; i < ItemBackpack.Capacity; i++) _game.Ui.BuyButton.EmitSignal(Button.SignalName.Pressed);
         await Frames(3);
         Check(player.Money == 1000 && player.Backpack.Count == 16 && player.WeaponSlots.All(w => w == null) &&
-            player.Backpack.Slots.All(item => item is { TotalAmmo: 40, RemainingAmmo: 40 }),
+            player.Backpack.Slots.All(item => item is AmmoItem { TotalAmmo: 40, RemainingAmmo: 40 }),
             "Sixteen UI purchases cost 4000 and occupy exactly the sixteen small slots");
         Check(_game.Ui.BuyButton.Disabled && !player.TryPurchaseAmmo(id, out var full) && full.Contains("已满") && player.Money == 1000,
             "Full item storage blocks purchase even when the player can afford it");
@@ -708,11 +773,12 @@ public partial class PrototypeSmokeTest : Node
         _game.Ui.BuyButton.EmitSignal(Button.SignalName.Pressed);
         PressKey(Key.Escape);
         await Frames(3);
+        await WaitForWeaponSwitch();
         PressKey(Key.R);
         await Frames(3);
         await ReloadUntil(_game.Player.ReloadDuration);
-        var partial = player.Backpack.Slots[0]!;
-        var full = player.Backpack.Slots[1]!;
+        var partial = (AmmoItem)player.Backpack.Slots[0]!;
+        var full = (AmmoItem)player.Backpack.Slots[1]!;
         int money = player.Money;
         Check(partial.RemainingAmmo == 10 && full.RemainingAmmo == 40, "Drag scenario has independent partial and full ammunition packs");
         Check(!player.TryMoveBackpackItem(0, 15, partial), "Inventory movement is unavailable while the backpack is closed");
@@ -773,6 +839,7 @@ public partial class PrototypeSmokeTest : Node
         _game.Ui.BuyButton.EmitSignal(Button.SignalName.Pressed);
         PressKey(Key.Escape);
         await Frames(2);
+        await WaitForWeaponSwitch();
         PressKey(Key.R);
         await Frames(3);
         PressKey(Key.Tab);
@@ -808,6 +875,31 @@ public partial class PrototypeSmokeTest : Node
             throw new InvalidOperationException("Reload timeline did not advance");
     }
 
+    private async Task VerifyUnarmedClearance(Node3D rig)
+    {
+        var hands = rig.FindChildren("hand*", "MeshInstance3D", true, false).Cast<MeshInstance3D>().ToArray();
+        float Clearance() => hands.Min(hand => (hand.GlobalTransform * hand.GetAabb()).Position.Y - _game.Player.GlobalPosition.Y);
+        Check(hands.Length == 4 && Clearance() > 0.15f, "Unarmed hands clear the ground while idle");
+        Vector3 start = _game.Player.GlobalPosition;
+        float minimum = Clearance();
+        Input.ActionPress("move_left");
+        for (int i = 0; i < 45; i++)
+        {
+            await Frames(1);
+            minimum = Mathf.Min(minimum, Clearance());
+        }
+        Input.ActionRelease("move_left");
+        Check(minimum > 0.15f, $"Unarmed hands clear the ground throughout a walk cycle ({minimum:F3} m)");
+        _game.Player.GlobalPosition = start;
+        _game.Player.Velocity = Vector3.Zero;
+        await Frames(15);
+        float cameraSize = _game.Camera.Size;
+        _game.Camera.Size = 4;
+        _game.Camera.SnapToTarget();
+        await Screenshot("character-unarmed.png");
+        _game.Camera.Size = cameraSize;
+    }
+
     private async Task Frames(int count)
     {
         for (int i = 0; i < count; i++)
@@ -815,14 +907,35 @@ public partial class PrototypeSmokeTest : Node
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             if (_reloadRig != null && _game.Player.IsReloading)
                 _maximumReloadGripError = Mathf.Max(_maximumReloadGripError, HandError(_reloadRig, followReloadTarget: true));
+            if (_switchRig != null && _game.Player.IsSwitching)
+                _maximumSwitchGripError = Mathf.Max(_maximumSwitchGripError, HandError(_switchRig));
         }
+    }
+
+    private async Task WaitForWeaponSwitch()
+    {
+        for (int i = 0; i < 900 && _game.Player.IsSwitching; i++) await Frames(1);
+        if (_game.Player.IsSwitching) throw new InvalidOperationException("武器切换动画未结束");
+    }
+
+    private async Task<bool> SelectWeaponAndWait(int slot)
+    {
+        if (!_game.Player.SelectWeaponSlot(slot)) return false;
+        await WaitForWeaponSwitch();
+        return true;
     }
 
     private void PressKey(Key key)
     {
-        Input.ParseInputEvent(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = true });
-        Input.ParseInputEvent(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = false });
+        KeyDown(key);
+        KeyUp(key);
     }
+
+    private void KeyDown(Key key) => Input.ParseInputEvent(
+        new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = true });
+
+    private void KeyUp(Key key) => Input.ParseInputEvent(
+        new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = false });
 
     private async Task Screenshot(string filename)
     {

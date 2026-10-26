@@ -26,6 +26,11 @@ internal static partial class WorkbenchTests
                 writer.Write(Enumerable.Repeat((byte)128, 8000).ToArray());
             }
             window.LoadCatalog("ak47");
+            // Normalize only the test's temporary catalog, regardless of real audio assignments.
+            window.GunshotInput.Text = "";
+            while (window.ReloadSoundRows.Count > 0) window.ReloadSoundRows[0].Remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            if (window.IsDirty) check(window.SaveAll(), "Prepare an empty audio fixture in the temporary catalog");
+            window.LoadCatalog("ak47");
             check(window.ReloadSoundRows.Count == 0 && window.GunshotInput.Text == "" && !window.IsDirty,
                 "Empty sound configuration opens without creating changes");
             foreach (string bad in new[] { "res://missing.wav", "res://../outside.wav", "C:/outside.wav", "res://data/weapons.json" })
@@ -57,6 +62,27 @@ internal static partial class WorkbenchTests
             check(weapon.GunshotSoundPath == sound && weapon.ReloadSounds.Count == 2 &&
                 weapon.ReloadSounds[0] == new ReloadSoundCue { SoundPath = sound, DelaySeconds = 1.25 } && weapon.ReloadSounds[1].DelaySeconds == 0,
                 "Gunshot, reload list order, paths and individual delays survive disk reload");
+            foreach (string bad in new[] { "-1", "200.01", "NaN", "Infinity", "1e9999", "", "abc" })
+            {
+                window.GunshotVolumeInput.Text = bad;
+                check(!window.CanSave && !window.SaveAll(), "Reject invalid gunshot volume: " + bad);
+                window.GunshotVolumeInput.Text = "35.5";
+                window.ReloadSoundRows[0].Volume.Text = bad;
+                check(!window.CanSave && !window.SaveAll(), "Reject invalid reload volume: " + bad);
+                window.ReloadSoundRows[0].Volume.Text = "0";
+            }
+            window.ReloadSoundRows[1].Volume.Text = "200";
+            check(window.IsDirty && window.CanSave && window.SaveAll(), "Volume-only edits including mute and maximum gain can be saved");
+            window.LoadCatalog("ak47");
+            weapon = window.Current!.Saved;
+            check(weapon.GunshotVolumePercent == 35.5 && weapon.ReloadSounds[0].VolumePercent == 0 && weapon.ReloadSounds[1].VolumePercent == 200,
+                "Independent volumes for the same sound file survive disk reload");
+            window.GunshotVolumeInput.Text = "90"; window.ReloadSoundRows[0].Volume.Text = "75";
+            window.SelectById("ak47");
+            check(window.GunshotVolumeInput.Text == "90" && window.ReloadSoundRows[0].Volume.Text == "75", "Reselecting retains volume drafts");
+            window.ResetCurrent();
+            check(window.GunshotVolumeInput.Text == "35.5" && window.ReloadSoundRows[0].Volume.Text == "0" && !window.IsDirty,
+                "Revert restores saved volumes and clears dirty state");
             window.ReloadSoundRows[0].Delay.Text = "0.75";
             window.GunshotInput.Text = "";
             window.ReloadSoundRows[1].Remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -75,12 +101,23 @@ internal static partial class WorkbenchTests
             Reject(weapon with { GunshotSoundPath = "res://outside.txt" }, "Game catalog rejects unsupported gunshot formats");
             Reject(weapon with { ReloadSounds = null! }, "Game catalog rejects a null reload list");
             Reject(weapon with { ReloadSounds = new() { null! } }, "Game catalog rejects a null reload cue");
+            foreach (double bad in new[] { -1, 200.01, double.NaN, double.PositiveInfinity })
+            {
+                Reject(weapon with { GunshotVolumePercent = bad }, "Game catalog rejects invalid gunshot volume: " + bad);
+                Reject(weapon with { ReloadSounds = new() { new ReloadSoundCue { SoundPath = sound, DelaySeconds = 0, VolumePercent = bad } } },
+                    "Game catalog rejects invalid reload volume: " + bad);
+            }
             foreach (double bad in new[] { -1, double.NaN, double.PositiveInfinity })
                 Reject(weapon with { ReloadSounds = new() { new ReloadSoundCue { SoundPath = sound, DelaySeconds = bad } } }, "Game catalog rejects invalid delay: " + bad);
             Reject(weapon with { ReloadSounds = new() { new ReloadSoundCue { SoundPath = "res://../outside.wav", DelaySeconds = 0 } } },
                 "Game catalog rejects reload resource path traversal");
             var json = JsonNode.Parse(JsonSerializer.Serialize(catalog, WeaponCatalogStore.JsonOptions))!;
-            var legacy = json["weapons"]![0]!.AsObject(); legacy.Remove("gunshotSoundPath"); legacy.Remove("reloadSounds");
+            var legacy = json["weapons"]![0]!.AsObject(); legacy.Remove("gunshotVolumePercent");
+            foreach (var cue in legacy["reloadSounds"]!.AsArray()) cue!.AsObject().Remove("volumePercent");
+            var legacyVolumes = WeaponCatalogStore.Parse(json.ToJsonString()).Get("ak47");
+            check(legacyVolumes.GunshotVolumePercent == 100 && legacyVolumes.ReloadSounds.All(cue => cue.VolumePercent == 100),
+                "Existing sound assignments without volume fields retain original loudness");
+            legacy.Remove("gunshotSoundPath"); legacy.Remove("reloadSounds");
             var old = WeaponCatalogStore.Parse(json.ToJsonString()).Get("ak47");
             check(old.GunshotSoundPath == "" && old.ReloadSounds.Count == 0, "Existing version 4 weapons without audio fields remain compatible");
             VerifySoundSequence(check);
@@ -106,7 +143,7 @@ internal static partial class WorkbenchTests
     private static void VerifySoundSequence(Action<bool, string> check)
     {
         var played = new List<string>();
-        var timeline = new ReloadSoundSequence(played.Add);
+        var timeline = new ReloadSoundSequence(cue => played.Add(cue.SoundPath));
         var cues = new List<ReloadSoundCue> {
             new() { SoundPath = "late", DelaySeconds = 2 }, new() { SoundPath = "immediate", DelaySeconds = 0 },
             new() { SoundPath = "middle-a", DelaySeconds = .5 }, new() { SoundPath = "middle-b", DelaySeconds = .5 } };

@@ -11,27 +11,35 @@ public partial class PrototypeSmokeTest
     {
         var player = _game.Player;
         var original = _game.Weapons.Get("ak47");
-        var fast = original with { Stats = original.Stats with { Price = 1000, ReloadDuration = 1.325 } };
-        var slow = original with { Stats = original.Stats with { Price = 1000, ReloadDuration = 5.3 } };
+        var fast = original with { Stats = original.Stats with { Price = 1000, ReloadDuration = 1.325, EquipDuration = .05, HolsterDuration = .05 } };
+        var slow = original with { Stats = original.Stats with { Price = 1000, ReloadDuration = 5.3, EquipDuration = .05, HolsterDuration = .05 } };
         player.GlobalPosition = _game.Crate.GlobalPosition + new Vector3(-1.7f, .02f, 0);
         player.Velocity = Vector3.Zero;
         await Frames(4); PressKey(Key.E); await Frames(2);
         _game.Weapons.Weapons[0] = fast;
         Check(player.TryPurchaseWeapon(fast.Id, out _), "Purchase a weapon with a fast reload configuration");
+        await WaitForWeaponSwitch();
         _game.Weapons.Weapons[0] = slow;
         Check(player.TryPurchaseWeapon(slow.Id, out _) && player.TryPurchaseAmmo(ItemCatalog.MediumAmmo.Id, out _) &&
             player.TryPurchaseAmmo(ItemCatalog.MediumAmmo.Id, out _), "Purchase a slow weapon and two ammunition packs");
         PressKey(Key.Escape); await Frames(2);
+        await WaitForWeaponSwitch();
 
         // Step the real player update deterministically to inspect either side of the deadline.
         player.SetProcess(false);
+        bool SelectAndFinish(int slot)
+        {
+            if (!player.SelectWeaponSlot(slot)) return false;
+            for (int i = 0; i < 900 && player.IsSwitching; i++) player._Process(1.0 / 60.0);
+            return !player.IsSwitching;
+        }
         var rig = player.Visual.GetNode<Node3D>("Millitia");
         Node3D Held() => rig.GetNode<Node3D>("HeldWeapon");
         Transform3D[] Pose() => new[] { Held() }.Concat(Held().FindChildren("*", "Node3D", true, false).Cast<Node3D>()).Select(n => n.Transform).ToArray();
         bool SamePose(Transform3D[] a, Transform3D[] b) => a.Length == b.Length && a.Zip(b).All(p => p.First.IsEqualApprox(p.Second));
         var checkpoints = new[] { .1, .2, .375, .5, .7, .805, .9, .99 };
         var fastPoses = new List<Transform3D[]>();
-        Check(player.SelectWeaponSlot(0) && player.TryStartReload(out _) && player.ReloadDuration == 1.325,
+        Check(SelectAndFinish(0) && player.TryStartReload(out _) && player.ReloadDuration == 1.325,
             "Reload captures the equipped weapon's configured duration");
         foreach (double progress in checkpoints)
         {
@@ -45,7 +53,7 @@ public partial class PrototypeSmokeTest
         Check(!player.TryStartReload(out _) && player.ReloadElapsed == elapsed && player.ReloadDuration == 1.325,
             "Repeated reload and later stat changes do not reset or stretch an active reload");
         fast.Stats.ReloadDuration = 1.325;
-        Check(player.SelectWeaponSlot(1) && !player.IsReloading && player.Backpack.Available(AmmoType.Medium) == 80,
+        Check(SelectAndFinish(1) && !player.IsReloading && player.Backpack.Available(AmmoType.Medium) == 80,
             "Switching to a different-duration weapon cancels without spending ammunition");
         var rest = Pose();
         Check(player.TryStartReload(out _) && player.ReloadDuration == 5.3, "Next reload uses the slower weapon's own duration");
@@ -53,7 +61,7 @@ public partial class PrototypeSmokeTest
         {
             player._Process(checkpoints[i] * 5.3 - player.ReloadElapsed);
             Check(SamePose(Pose(), fastPoses[i]) && HandError(rig, followReloadTarget: true) < .025f && player.MagazineAmmo(1) == 0,
-                $"Fast and slow reloads have identical gun, magazine, bolt and hand poses at {checkpoints[i]:P0}");
+                $"Fast and slow reloads have identical gun, magazine and hand poses at {checkpoints[i]:P0}");
         }
         player._Process(5.299 - player.ReloadElapsed);
         Check(player.IsReloading && player.Backpack.Available(AmmoType.Medium) == 80, "Slow reload does not fill at the former 2.65-second deadline or just before its own deadline");
@@ -62,7 +70,7 @@ public partial class PrototypeSmokeTest
             player.Backpack.Available(AmmoType.Medium) == 50 && SamePose(rest, Pose()) && HandError(rig) < .025f,
             "Slow reload finishes at its configured time, fills only its slot and restores the entire holding pose");
         Check(!player.TryStartReload(out _), "Full magazine still prevents reload after changing the duration");
-        Check(player.SelectWeaponSlot(0) && player.TryStartReload(out _), "Fast weapon can restart after cancellation");
+        Check(SelectAndFinish(0) && player.TryStartReload(out _), "Fast weapon can restart after cancellation");
         player._Process(1.324);
         Check(player.IsReloading && player.MagazineAmmo(0) == 0 && player.Backpack.Available(AmmoType.Medium) == 50,
             "Fast reload waits for its full configured duration");

@@ -13,7 +13,7 @@ public partial class WeaponAudioPlayer : Node
     private WeaponDefinition? _weapon;
     internal event Action<string>? SoundStarted;
 
-    public WeaponAudioPlayer() => _reload = new ReloadSoundSequence(path => Play(path, _reloadVoices));
+    public WeaponAudioPlayer() => _reload = new ReloadSoundSequence(cue => Play(cue.SoundPath, cue.VolumePercent, _reloadVoices));
 
     public void Equip(WeaponDefinition weapon)
     {
@@ -33,10 +33,10 @@ public partial class WeaponAudioPlayer : Node
 
     public void Advance(double delta) => _reload.Advance(delta);
 
-    // Called by the firing system when a shot succeeds; no firing system exists yet.
+    // Called only after a shot successfully consumes a round.
     public void PlayGunshot()
     {
-        if (_weapon != null) Play(_weapon.GunshotSoundPath, _gunshotVoices);
+        if (_weapon != null) Play(_weapon.GunshotSoundPath, _weapon.GunshotVolumePercent, _gunshotVoices);
     }
 
     public void CancelReload()
@@ -59,10 +59,11 @@ public partial class WeaponAudioPlayer : Node
         voices.Clear();
     }
 
-    private void Play(string path, List<AudioStreamPlayer> voices)
+    private void Play(string path, double volumePercent, List<AudioStreamPlayer> voices)
     {
+        if (volumePercent <= 0) return;
         if (Load(path) is not { } stream) return;
-        var voice = new AudioStreamPlayer { Stream = stream };
+        var voice = new AudioStreamPlayer { Stream = stream, VolumeLinear = (float)(volumePercent / 100) };
         AddChild(voice);
         voices.Add(voice);
         voice.Finished += () => { voices.Remove(voice); voice.QueueFree(); };

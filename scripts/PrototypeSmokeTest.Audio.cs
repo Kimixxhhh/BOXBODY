@@ -19,20 +19,26 @@ public partial class PrototypeSmokeTest
                 Data = new byte[16000], LoopMode = AudioStreamWav.LoopModeEnum.Forward, LoopEnd = 16000 };
             stream.TakeOverPath(path); return stream;
         }).ToArray();
-        var weapon = original with { Stats = original.Stats with { Price = 1000 }, GunshotSoundPath = paths[0],
+        var weapon = original with { Stats = original.Stats with { Price = 1000, EquipDuration = .05, HolsterDuration = .05 }, GunshotSoundPath = paths[0],
+            GunshotVolumePercent = 40,
             ReloadSounds = new() {
-                new() { SoundPath = paths[4], DelaySeconds = 1.8 }, new() { SoundPath = paths[1], DelaySeconds = 0 },
-                new() { SoundPath = paths[2], DelaySeconds = .5 }, new() { SoundPath = paths[3], DelaySeconds = .5 },
+                new() { SoundPath = paths[4], DelaySeconds = 1.8 }, new() { SoundPath = paths[1], DelaySeconds = 0, VolumePercent = 25 },
+                new() { SoundPath = paths[2], DelaySeconds = .5, VolumePercent = 60 }, new() { SoundPath = paths[3], DelaySeconds = .5, VolumePercent = 150 },
                 new() { SoundPath = paths[5], DelaySeconds = 4 } } };
         _game.Weapons.Weapons[0] = weapon;
         var played = new List<string>();
         player.WeaponAudio.SoundStarted += played.Add;
+        var volumes = new List<float>();
+        player.WeaponAudio.SoundStarted += _ => volumes.Add(player.WeaponAudio.GetChildren().OfType<AudioStreamPlayer>().Last().VolumeLinear);
         int Voices() => player.WeaponAudio.GetChildren().OfType<AudioStreamPlayer>().Count(v => !v.IsQueuedForDeletion() && v.Playing);
         Check(!player.TryStartReload(out _) && played.Count == 0, "Unarmed reload starts no audio");
         player.GlobalPosition = _game.Crate.GlobalPosition + new Vector3(-1.7f, .02f, 0);
         player.Velocity = Vector3.Zero;
         await Frames(4); PressKey(Key.E); await Frames(2);
-        Check(player.TryPurchaseWeapon(weapon.Id, out _) && player.TryPurchaseWeapon(weapon.Id, out _), "Purchase and equip weapons with audio assignments");
+        Check(player.TryPurchaseWeapon(weapon.Id, out _), "Purchase the first weapon with audio assignments");
+        await WaitForWeaponSwitch();
+        Check(player.TryPurchaseWeapon(weapon.Id, out _), "Purchase and equip the second weapon with audio assignments");
+        await WaitForWeaponSwitch();
         PressKey(Key.Escape); await Frames(2);
         Check(!player.TryStartReload(out _) && played.Count == 0, "Reload without matching ammunition starts no audio");
         PressKey(Key.E); await Frames(2);
@@ -40,15 +46,19 @@ public partial class PrototypeSmokeTest
             "Audio test buys ammunition through the real shop");
         Check(!player.TryStartReload(out _) && played.Count == 0, "Blocked reload while the shop is open remains silent");
         PressKey(Key.Escape); await Frames(2);
-        Check(player.SelectWeaponSlot(0) && player.TryStartReload(out _) && played.SequenceEqual(new[] { paths[1] }),
+        bool selected = await SelectWeaponAndWait(0);
+        Check(selected && player.TryStartReload(out _) && played.SequenceEqual(new[] { paths[1] }),
             "Successful reload immediately plays the zero-delay cue");
         Check(!player.TryStartReload(out _) && played.Count == 1, "Repeated reload input cannot replay or restart audio");
         await ReloadUntil(.7f);
         Check(played.SequenceEqual(new[] { paths[1], paths[2], paths[3] }) && Voices() == 3,
             "Reload clock plays delayed and simultaneous sounds on independent active voices");
+        Check(volumes.Zip(new[] { .25f, .6f, 1.5f }).All(pair => Mathf.IsEqualApprox(pair.First, pair.Second)) && volumes.Count == 3,
+            "Each overlapping reload voice uses its own configured volume");
         Check(player.WeaponAudio.GetChildren().OfType<AudioStreamPlayer>().All(v => ((AudioStreamWav)v.Stream).LoopMode == AudioStreamWav.LoopModeEnum.Disabled) &&
             fixtures.All(f => f.LoopMode == AudioStreamWav.LoopModeEnum.Forward), "Effects are one-shots without mutating imported source resources");
-        Check(player.SelectWeaponSlot(1) && !player.IsReloading && Voices() == 0, "Switching weapons stops ongoing reload voices immediately");
+        bool switched = await SelectWeaponAndWait(1);
+        Check(switched && !player.IsReloading && Voices() == 0, "Switching weapons stops ongoing reload voices immediately");
         player.WeaponAudio.Advance(10); await Frames(2);
         Check(played.Count == 3 && player.Backpack.Available(AmmoType.Medium) == 80, "Cancelled reload has no late sounds or ammunition consumption");
         played.Clear();
@@ -61,7 +71,17 @@ public partial class PrototypeSmokeTest
         Check(!player.TryStartReload(out _) && played.Count == 5, "Full magazine does not retrigger reload audio");
         player.WeaponAudio.PlayGunshot(); player.WeaponAudio.PlayGunshot();
         Check(played.TakeLast(2).All(path => path == paths[0]) && Voices() >= 2, "Gunshot playback uses the assigned sound and allows successive shots to overlap");
-        player.WeaponAudio.Equip(original);
+        Check(volumes.TakeLast(2).All(volume => Mathf.IsEqualApprox(volume, .4f)), "Gunshot voices use the configured gunshot volume");
+        player.WeaponAudio.Equip(weapon with { GunshotVolumePercent = 0, ReloadSounds = new() {
+            new() { SoundPath = paths[1], DelaySeconds = 0, VolumePercent = 0 },
+            new() { SoundPath = paths[1], DelaySeconds = .1, VolumePercent = 200 } } });
+        played.Clear(); volumes.Clear();
+        player.WeaponAudio.PlayGunshot(); player.WeaponAudio.StartReload();
+        Check(played.Count == 0 && Voices() == 0, "Zero volume mutes assigned gunshot and reload sounds");
+        player.WeaponAudio.Advance(.1);
+        Check(played.SequenceEqual(new[] { paths[1] }) && Mathf.IsEqualApprox(volumes.Single(), 2),
+            "Muted cue does not suppress a later louder cue sharing the same sound file");
+        player.WeaponAudio.Equip(original with { GunshotSoundPath = "", ReloadSounds = new() });
         played.Clear(); player.WeaponAudio.PlayGunshot(); player.WeaponAudio.StartReload(); player.WeaponAudio.Advance(10);
         Check(played.Count == 0 && Voices() == 0, "Unassigned sounds are silent and replacing the weapon clears old audio");
         await Frames(4); // Let the audio server release stopped playback handles before shutting down.

@@ -13,29 +13,41 @@ namespace WeaponWorkbench;
 public sealed class WeaponDraft
 {
     public WeaponDefinition Saved { get; private set; }
+    public bool IsNew { get; private set; }
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Category { get; set; } = "";
     public Dictionary<string, string> Values { get; } = new();
     public FireMode Mode { get; set; }
     public AmmoType AmmoType { get; set; }
     public string ScenePath { get; set; } = "";
     public string GunshotSoundPath { get; set; } = "";
+    public string GunshotVolume { get; set; } = "100";
     public List<ReloadSoundDraft> ReloadSounds { get; } = new();
     private readonly string _project;
-    public WeaponDraft(WeaponDefinition saved, string project) { Saved = saved; _project = project; Reset(); }
+    public WeaponDraft(WeaponDefinition saved, string project, bool isNew = false) { Saved = saved; _project = project; IsNew = isNew; Reset(); }
     public void Reset()
     {
+        Id = Saved.Id; Name = Saved.Name; Category = Saved.Category;
         foreach (var field in WeaponFields.All) Values[field.Key] = field.Read(Saved.Stats).ToString("G", CultureInfo.InvariantCulture);
         Mode = Saved.Stats.FireMode;
         AmmoType = Saved.Stats.AmmoType;
         ScenePath = Saved.ScenePath;
         GunshotSoundPath = Saved.GunshotSoundPath;
+        GunshotVolume = Saved.GunshotVolumePercent.ToString("G", CultureInfo.InvariantCulture);
         ReloadSounds.Clear();
         ReloadSounds.AddRange(Saved.ReloadSounds.Select(cue => new ReloadSoundDraft {
-            SoundPath = cue.SoundPath, Delay = cue.DelaySeconds.ToString("G", CultureInfo.InvariantCulture) }));
+            SoundPath = cue.SoundPath, Delay = cue.DelaySeconds.ToString("G", CultureInfo.InvariantCulture),
+            Volume = cue.VolumePercent.ToString("G", CultureInfo.InvariantCulture) }));
     }
     public bool TryBuild(out WeaponStats stats, out Dictionary<string, string> errors)
     {
         stats = Saved.Stats with { FireMode = Mode, AmmoType = AmmoType };
         errors = new();
+        if (string.IsNullOrWhiteSpace(Id)) errors["id"] = "请填写武器编号。";
+        else if (IsNew && !Id.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-')) errors["id"] = "编号只能包含英文字母、数字、下划线和短横线。";
+        if (string.IsNullOrWhiteSpace(Name)) errors["name"] = "请填写武器名称。";
+        if (string.IsNullOrWhiteSpace(Category)) errors["category"] = "请填写武器分类。";
         foreach (var field in WeaponFields.All)
         {
             if (!double.TryParse(Values[field.Key], NumberStyles.Float, CultureInfo.InvariantCulture, out double value) ||
@@ -53,20 +65,27 @@ public sealed class WeaponDraft
         if (WeaponResources.FileError(_project, ScenePath) is string sceneError) errors["scenePath"] = sceneError;
         if (WeaponResources.SoundFileError(_project, GunshotSoundPath, optional: true) is string gunshotError)
             errors["gunshotSoundPath"] = gunshotError;
+        if (!ValidVolume(GunshotVolume)) errors["gunshotVolume"] = "音量须为 0–200% 的数值。";
         for (int i = 0; i < ReloadSounds.Count; i++)
         {
             var cue = ReloadSounds[i];
+            if (!ValidVolume(cue.Volume)) errors[$"reloadVolume:{i}"] = "音量须为 0–200% 的数值。";
             if (WeaponResources.SoundFileError(_project, cue.SoundPath) is string soundError) errors[$"reloadSound:{i}"] = soundError;
             if (!double.TryParse(cue.Delay, NumberStyles.Float, CultureInfo.InvariantCulture, out double delay) || !double.IsFinite(delay) || delay < 0)
                 errors[$"reloadDelay:{i}"] = "播放延迟须为大于或等于 0 的秒数。";
         }
         return errors.Count == 0;
     }
+    private static bool ValidVolume(string text) => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+        && double.IsFinite(value) && value >= 0 && value <= 200;
     public List<ReloadSoundCue> BuildReloadSounds() => ReloadSounds.Select(cue => new ReloadSoundCue {
-        SoundPath = cue.SoundPath, DelaySeconds = double.Parse(cue.Delay, CultureInfo.InvariantCulture) }).ToList();
-    public bool IsDirty => !TryBuild(out var stats, out _) || stats != Saved.Stats || ScenePath != Saved.ScenePath ||
-        GunshotSoundPath != Saved.GunshotSoundPath || !BuildReloadSounds().SequenceEqual(Saved.ReloadSounds);
-    public void Accept(WeaponDefinition saved) { Saved = saved; Reset(); }
+        SoundPath = cue.SoundPath, DelaySeconds = double.Parse(cue.Delay, CultureInfo.InvariantCulture),
+        VolumePercent = double.Parse(cue.Volume, CultureInfo.InvariantCulture) }).ToList();
+    public bool IsDirty => IsNew || !TryBuild(out var stats, out _) || Id != Saved.Id || Name != Saved.Name || Category != Saved.Category ||
+        stats != Saved.Stats || ScenePath != Saved.ScenePath ||
+        GunshotSoundPath != Saved.GunshotSoundPath || double.Parse(GunshotVolume, CultureInfo.InvariantCulture) != Saved.GunshotVolumePercent ||
+        !BuildReloadSounds().SequenceEqual(Saved.ReloadSounds);
+    public void Accept(WeaponDefinition saved) { Saved = saved; IsNew = false; Reset(); }
 }
 
 public sealed partial class MainWindow : Window
@@ -83,10 +102,15 @@ public sealed partial class MainWindow : Window
     internal readonly WeaponScenePreview ModelPreview;
     private readonly TextBlock _resourceCount = new();
     private readonly Dictionary<string, TextBlock> _messages = new();
-    private readonly Dictionary<string, TextBlock> _listLabels = new();
+    private readonly Dictionary<WeaponDraft, TextBlock> _listLabels = new();
+    private readonly Dictionary<WeaponDraft, TextBlock> _categoryLabels = new();
     private readonly ListBox _list = new();
     private readonly TextBox _search = new();
     private readonly StackPanel _editor = new();
+    private ScrollViewer _scroll = null!;
+    private TextBlock _searchPlaceholder = null!;
+    private TextBlock _sidebarTitle = null!;
+    private Button _weaponModeButton = null!, _throwableModeButton = null!;
     private readonly TextBlock _status = new(), _summary = new(), _title = new(), _subtitle = new(), _dirtyText = new();
     private readonly Button _save = new(), _reset = new();
     private ComboBox _mode = null!;
@@ -95,13 +119,14 @@ public sealed partial class MainWindow : Window
     internal WeaponDraft? Current { get; private set; }
     internal bool CanSave => _save.IsEnabled;
     internal string Status => _status.Text;
-    internal bool IsDirty => Drafts.Any(d => d.IsDirty);
+    internal bool IsDirty => Drafts.Any(d => d.IsDirty) || ThrowableDrafts.Any(d => d.IsDirty);
 
     public MainWindow(string filePath, string? project = null)
     {
         _store = new WeaponCatalogStore(filePath);
         _project = project ?? Directory.GetParent(Path.GetDirectoryName(filePath)!)!.FullName;
         ModelPreview = new WeaponScenePreview(_project);
+        ThrowablePreview = new WeaponScenePreview(_project) { EmptyMessage = "请选择有效的物品场景" };
         Title = "Field Kit · 武器维护工具";
         Width = 1390; Height = 950; MinWidth = 1040; MinHeight = 700;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -110,9 +135,14 @@ public sealed partial class MainWindow : Window
         BuildLayout();
         LoadCatalog();
         Closing += (_, e) => { if (!_skipClose && !ConfirmDiscardOrSave()) e.Cancel = true; };
-        Closed += (_, _) => ModelPreview.Dispose();
+        Closed += (_, _) => { ModelPreview.Dispose(); ThrowablePreview.Dispose(); };
         PreviewKeyDown += (_, e) => {
             if (e.Key == Key.S && Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) { SaveAll(); e.Handled = true; }
+            else if (e.Key == Key.N && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                if (ThrowablesMode) AddNewThrowable(); else AddNewWeapon();
+                e.Handled = true;
+            }
         };
     }
 
@@ -163,8 +193,14 @@ public sealed partial class MainWindow : Window
         root.Children.Add(new Border { Background = Brushes.White, BorderBrush = Line, BorderThickness = new Thickness(0,0,0,1), Child = header });
         var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         DockPanel.SetDock(actions, Dock.Right); header.Children.Add(actions);
+        _weaponModeButton = new Button { Content = "武器配置", Padding = new Thickness(14,8,14,8), Margin = new Thickness(0,0,6,0) };
+        _weaponModeButton.Click += (_, _) => SwitchMode(false);
+        actions.Children.Add(_weaponModeButton);
+        _throwableModeButton = new Button { Content = "投掷物模板", Padding = new Thickness(14,8,14,8), Margin = new Thickness(0,0,16,0) };
+        _throwableModeButton.Click += (_, _) => SwitchMode(true);
+        actions.Children.Add(_throwableModeButton);
         var reload = new Button { Content = "重新载入", Margin = new Thickness(0,0,10,0) };
-        reload.Click += (_, _) => { if (ConfirmDiscardOrSave()) LoadCatalog(Current?.Saved.Id); };
+        reload.Click += (_, _) => { if (ConfirmDiscardOrSave()) LoadCatalog(Current?.Id); };
         actions.Children.Add(reload);
         _save.Content = "保存全部   Ctrl+S"; _save.Background = Teal; _save.Foreground = Brushes.White; _save.BorderBrush = Teal;
         _save.Click += (_, _) => SaveAll(); actions.Children.Add(_save);
@@ -180,41 +216,57 @@ public sealed partial class MainWindow : Window
         body.Children.Add(sideBorder);
         sidebar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         sidebar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        sidebar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         sidebar.RowDefinitions.Add(new RowDefinition());
         sidebar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        sidebar.Children.Add(Label("武器资源", 15, Ink, FontWeights.SemiBold));
+        _sidebarTitle = Label("武器资源", 15, Ink, FontWeights.SemiBold);
+        sidebar.Children.Add(_sidebarTitle);
+        AddWeaponButton.Content = "＋ 新增武器"; AddWeaponButton.Margin = new Thickness(0,12,0,0);
+        AddWeaponButton.Background = Teal; AddWeaponButton.Foreground = Brushes.White; AddWeaponButton.ToolTip = "新增武器草稿（Ctrl+N）";
+        AddWeaponButton.Click += (_, _) => { if (ThrowablesMode) AddNewThrowable(); else AddNewWeapon(); };
+        Grid.SetRow(AddWeaponButton, 1); sidebar.Children.Add(AddWeaponButton);
         var searchBox = new Grid { Margin = new Thickness(0,14,0,16) };
         _search.ToolTip = "按名称、分类或 ID 搜索"; _search.FontSize = 12;
-        var placeholder = Label("搜索名称、分类或 ID", 11, Muted);
-        placeholder.IsHitTestVisible = false; placeholder.Margin = new Thickness(10,0,0,0); placeholder.VerticalAlignment = VerticalAlignment.Center;
-        searchBox.Children.Add(_search); searchBox.Children.Add(placeholder);
-        _search.TextChanged += (_, _) => { placeholder.Visibility = string.IsNullOrEmpty(_search.Text) ? Visibility.Visible : Visibility.Collapsed; FilterList(); };
-        Grid.SetRow(searchBox, 1); sidebar.Children.Add(searchBox);
+        _searchPlaceholder = Label("搜索名称、分类或 ID", 11, Muted);
+        _searchPlaceholder.IsHitTestVisible = false; _searchPlaceholder.Margin = new Thickness(10,0,0,0);
+        _searchPlaceholder.VerticalAlignment = VerticalAlignment.Center;
+        searchBox.Children.Add(_search); searchBox.Children.Add(_searchPlaceholder);
+        _search.TextChanged += (_, _) => {
+            _searchPlaceholder.Visibility = string.IsNullOrEmpty(_search.Text) ? Visibility.Visible : Visibility.Collapsed;
+            FilterList();
+        };
+        Grid.SetRow(searchBox, 2); sidebar.Children.Add(searchBox);
         _list.Background = Brushes.Transparent; _list.BorderThickness = new Thickness(0);
         _list.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Disabled);
-        Grid.SetRow(_list, 2); sidebar.Children.Add(_list);
+        Grid.SetRow(_list, 3); sidebar.Children.Add(_list);
         _list.SelectionChanged += (_, _) => {
-            if (!_binding && _list.SelectedItem is ListBoxItem item && item.Tag is WeaponDraft draft) Select(draft);
+            if (_binding || _list.SelectedItem is not ListBoxItem item) return;
+            if (item.Tag is WeaponDraft weapon) Select(weapon);
+            else if (item.Tag is ThrowableDraft throwable) SelectThrowable(throwable);
         };
         _resourceCount.FontSize = 11; _resourceCount.Foreground = Muted;
         _resourceCount.Margin = new Thickness(4,16,4,0); _resourceCount.LineHeight = 20;
-        Grid.SetRow(_resourceCount, 3); sidebar.Children.Add(_resourceCount);
+        Grid.SetRow(_resourceCount, 4); sidebar.Children.Add(_resourceCount);
 
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        _scroll = scroll;
         Grid.SetColumn(scroll, 1); body.Children.Add(scroll);
         _editor.Margin = new Thickness(28, 22, 28, 24); scroll.Content = _editor;
         var identity = new DockPanel { Margin = new Thickness(0,0,0,18) };
         _reset.Content = "撤销本武器修改"; _reset.VerticalAlignment = VerticalAlignment.Center;
         _reset.Click += (_, _) => {
+            if (Current?.IsNew == true) { ResetCurrent(); return; }
             if (Current != null && MessageBox.Show(this, "撤销当前武器所有未保存的修改？", "撤销修改", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK)
                 ResetCurrent();
         };
         DockPanel.SetDock(_reset, Dock.Right); identity.Children.Add(_reset);
         var identityText = new StackPanel(); identity.Children.Add(identityText);
-        _title.FontSize = 25; _title.FontWeight = FontWeights.SemiBold;
+        _title.FontSize = 25; _title.FontWeight = FontWeights.SemiBold; _title.TextWrapping = TextWrapping.Wrap;
         _subtitle.FontSize = 11; _subtitle.Foreground = Muted; _subtitle.Margin = new Thickness(0,5,0,0);
+        _subtitle.TextWrapping = TextWrapping.Wrap;
         identityText.Children.Add(_title); identityText.Children.Add(_subtitle); _editor.Children.Add(identity);
+        BuildIdentityCard();
         BuildResourceCard();
 
         var cards = new Grid();
@@ -222,14 +274,15 @@ public sealed partial class MainWindow : Window
         cards.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); cards.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _editor.Children.Add(cards);
         AddCard(cards, 0, 0, "01", "价格与命中效果", new[] { "price", "damage", "enemySlowPercent", "knockbackSpeed" });
-        AddCard(cards, 1, 0, "02", "开火与装填", new[] { "fireCooldown", "magazineCapacity", "fireMode", "ammoType", "reloadDuration" });
+        AddCard(cards, 1, 0, "02", "开火、装填与切枪", new[] { "fireCooldown", "magazineCapacity", "fireMode", "ammoType", "reloadDuration", "equipDuration", "holsterDuration" });
         AddCard(cards, 0, 1, "03", "移动、转向与弹道", new[] { "movementInertiaPercent", "turnFollowSpeed", "projectileSpeed" });
         AddCard(cards, 1, 1, "04", "散布控制", new[] { "spreadMin", "spreadMax", "spreadPerShot", "spreadRecovery" });
         BuildAudioCard();
+        BuildThrowableEditor();
         var summaryPanel = new Border { Background = Brush("#E5EEE7"), CornerRadius = new CornerRadius(6), Padding = new Thickness(18,13,18,13), Margin = new Thickness(0,8,0,0) };
         _summary.Foreground = Teal; _summary.TextWrapping = TextWrapping.Wrap; _summary.LineHeight = 23;
         summaryPanel.Child = _summary; _editor.Children.Add(summaryPanel);
-        var scope = Label("保存后，重启游戏读取配置。换弹音效已接入换弹流程；枪声与射击、命中属性为后续开火玩法预留。", 11, Muted);
+        var scope = Label("保存后重启游戏，新武器将出现在武器箱购买列表中。射击、装填、散布和音效按配置生效。", 11, Muted);
         scope.TextWrapping = TextWrapping.Wrap; scope.Margin = new Thickness(2,12,2,0); _editor.Children.Add(scope);
 
         var footer = new Grid { Margin = new Thickness(25,12,25,12) };
@@ -242,6 +295,7 @@ public sealed partial class MainWindow : Window
         path.ToolTip = _store.FilePath; path.Margin = new Thickness(0,4,12,0); state.Children.Add(path);
         _dirtyText.VerticalAlignment = VerticalAlignment.Center; _dirtyText.Foreground = Teal;
         _dirtyText.Margin = new Thickness(20,0,0,0); Grid.SetColumn(_dirtyText, 1); footer.Children.Add(_dirtyText);
+        RefreshModeButtons();
     }
 
     private void BuildResourceCard()
@@ -347,22 +401,24 @@ public sealed partial class MainWindow : Window
             var loaded = _store.Load();
             _catalog = loaded;
             ModelPreview.SetScene(null);
+            ThrowablePreview.SetScene(null);
+            string weaponSelection = selected ?? Current?.Id ?? loaded.Weapons[0].Id;
+            string? throwableSelection = CurrentThrowable?.Id;
+            if (selected != null && loaded.Throwables.Any(t => t.Id == selected)) throwableSelection = selected;
             Drafts.Clear(); Drafts.AddRange(loaded.Weapons.Select(w => new WeaponDraft(w, _project)));
-            _resourceCount.Text = $"{Drafts.Count} 个已登记武器\n● 表示尚未保存的修改";
-            _binding = true; _list.Items.Clear(); _listLabels.Clear();
-            foreach (var draft in Drafts)
-            {
-                var text = Label(draft.Saved.Name, 14, Ink, FontWeights.SemiBold);
-                _listLabels[draft.Saved.Id] = text;
-                var stack = new StackPanel { Margin = new Thickness(8,8,8,8) };
-                stack.Children.Add(text); stack.Children.Add(Label(draft.Saved.Category, 10, Muted));
-                _list.Items.Add(new ListBoxItem { Content = stack, Tag = draft, Margin = new Thickness(0,0,0,4) });
-            }
-            _binding = false;
+            ThrowableDrafts.Clear(); ThrowableDrafts.AddRange(loaded.Throwables.Select(t => new ThrowableDraft(t, _project)));
+            RebuildCurrentList();
             _search.Text = "";
-            SelectById(selected ?? Drafts[0].Saved.Id);
+            if (ThrowablesMode)
+            {
+                if (ThrowableDrafts.Count > 0) SelectThrowableById(throwableSelection ?? ThrowableDrafts[0].Id);
+                else { CurrentThrowable = null; _throwableEditor.IsEnabled = false; }
+            }
+            else SelectById(weaponSelection);
             _editor.IsEnabled = true;
-            SetStatus($"已载入 {Drafts.Count} 个武器。数值为初始调参配置，可按玩法调整。", false);
+            _throwableEditor.IsEnabled = ThrowableDrafts.Count > 0;
+            AddWeaponButton.IsEnabled = true;
+            SetStatus($"已载入 {Drafts.Count} 个武器、{ThrowableDrafts.Count} 个投掷物模板。数值为初始调参配置，可按玩法调整。", false);
         }
         catch (Exception error)
         {
@@ -374,21 +430,27 @@ public sealed partial class MainWindow : Window
 
     internal void SelectById(string id)
     {
-        var item = _list.Items.Cast<ListBoxItem>().FirstOrDefault(i => ((WeaponDraft)i.Tag).Saved.Id == id) ?? (ListBoxItem)_list.Items[0];
+        if (ThrowablesMode) { SelectThrowableById(id); return; }
+        var item = _list.Items.Cast<ListBoxItem>().FirstOrDefault(i => i.Tag is WeaponDraft d && d.Id == id)
+            ?? (_list.Items.Count > 0 ? (ListBoxItem)_list.Items[0] : null);
+        if (item == null) return;
         _list.SelectedItem = item;
-        Select((WeaponDraft)item.Tag);
+        if (item.Tag is WeaponDraft draft) Select(draft);
     }
 
     private void Select(WeaponDraft draft)
     {
         Current = draft; _binding = true;
-        _title.Text = draft.Saved.Name;
-        _subtitle.Text = $"{draft.Saved.Category}   /   {draft.Saved.Id}";
+        IdentityInputs["id"].Text = draft.Id;
+        IdentityInputs["id"].IsReadOnly = !draft.IsNew;
+        IdentityInputs["name"].Text = draft.Name;
+        IdentityInputs["category"].Text = draft.Category;
         ResourceInputs["scenePath"].Text = draft.ScenePath;
         foreach (var field in WeaponFields.All) Inputs[field.Key].Text = draft.Values[field.Key];
         _mode.SelectedIndex = draft.Mode == FireMode.Automatic ? 1 : 0;
         AmmoTypeInput.SelectedValue = draft.AmmoType;
         GunshotInput.Text = draft.GunshotSoundPath;
+        GunshotVolumeInput.Text = draft.GunshotVolume;
         RebuildReloadSoundRows();
         _binding = false; RefreshState();
     }
@@ -398,15 +460,20 @@ public sealed partial class MainWindow : Window
         string term = _search.Text.Trim();
         foreach (ListBoxItem item in _list.Items)
         {
-            var weapon = ((WeaponDraft)item.Tag).Saved;
-            item.Visibility = $"{weapon.Id} {weapon.Name} {weapon.Category}".Contains(term, StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed;
+            string text = item.Tag switch {
+                WeaponDraft weapon => $"{weapon.Id} {weapon.Name} {weapon.Category}",
+                ThrowableDraft throwable => $"{throwable.Id} {throwable.Name} {throwable.Category}",
+                _ => ""
+            };
+            item.Visibility = text.Contains(term, StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 
     private void RefreshState()
     {
         if (Current == null) return;
-        bool valid = Current.TryBuild(out var stats, out var errors);
+        bool valid = TryBuildDraft(Current, out var stats, out var errors);
+        RefreshIdentityState(errors);
         RefreshAudioState(errors);
         AmmoTypeInput.BorderBrush = errors.ContainsKey("ammoType") ? Error : Line;
         foreach (string key in ResourceInputs.Keys)
@@ -424,39 +491,68 @@ public sealed partial class MainWindow : Window
             _messages[field.Key].Text = bad ? error! : field.Hint;
             _messages[field.Key].Foreground = bad ? Error : Muted;
         }
-        int dirty = Drafts.Count(d => d.IsDirty);
-        int invalid = Drafts.Count(d => !d.TryBuild(out _, out _));
-        foreach (var draft in Drafts) _listLabels[draft.Saved.Id].Text = draft.Saved.Name + (draft.IsDirty ? "  ●" : "");
-        _save.IsEnabled = dirty > 0 && invalid == 0;
+        int invalid = Drafts.Count(d => !TryBuildDraft(d, out _, out _)) + ThrowableDrafts.Count(d => !TryBuildThrowableDraft(d, out _, out _));
+        foreach (var draft in Drafts)
+        {
+            if (_listLabels.TryGetValue(draft, out var label))
+                label.Text = (draft.Name.Length > 0 ? draft.Name : "未命名武器") + (draft.IsNew ? "  [新增]" : draft.IsDirty ? "  ●" : "");
+            if (_categoryLabels.TryGetValue(draft, out var category)) category.Text = draft.Category;
+        }
+        FilterList();
+        RefreshSaveState();
         _reset.IsEnabled = Current.IsDirty;
-        _dirtyText.Text = dirty > 0 ? $"{dirty} 个武器有未保存修改" : "所有修改已保存";
+        _reset.Content = Current.IsNew ? "取消新增" : "撤销本武器修改";
         _summary.Text = valid
             ? $"参数预览   ·   射速 {stats.ShotsPerMinute():0.##} 发/分钟   ·   弹夹 {stats.MagazineCapacity} 发   ·   换弹 {stats.ReloadDuration:0.###} 秒   ·   持有者移速 {stats.MovementSpeedMultiplier() * 100:0.##}%   ·   敌人移速 {stats.EnemySpeedMultiplier() * 100:0.##}%\n"
                 + $"转向系数 {stats.TurnFollowSpeed:0.###}   ·   散布 {stats.SpreadMin:0.###}° → {stats.SpreadMax:0.###}°   ·   每发 +{stats.SpreadPerShot:0.###}°   ·   停火 {stats.FireCooldown:0.###} 秒后以 {stats.SpreadRecovery:0.###}°/秒恢复"
             : "请修正红色字段后查看参数预览。";
-        SetStatus(invalid > 0 ? $"{invalid} 个武器存在无效参数；请修正后再保存。" : dirty > 0 ? "修改暂存于当前窗口，点击“保存全部”写入游戏配置。" : "配置已就绪。选择武器开始编辑。", invalid > 0);
+        SetStatus(invalid > 0 ? $"{invalid} 个条目存在无效参数；请修正后再保存。" : IsDirty ? "修改暂存于当前窗口，点击“保存全部”写入游戏配置。" : "配置已就绪。选择武器开始编辑。", invalid > 0);
     }
 
     internal bool SaveAll()
     {
         if (_catalog == null) return false;
-        if (Drafts.Any(d => !d.TryBuild(out _, out _))) { SetStatus("保存失败：请先修正无效参数。", true); return false; }
+        if (Drafts.Any(d => !TryBuildDraft(d, out _, out _)) ||
+            ThrowableDrafts.Any(d => !TryBuildThrowableDraft(d, out _, out _)))
+        { SetStatus("保存失败：请先修正无效参数。", true); return false; }
         if (!IsDirty) return true;
         try
         {
-            var changed = _catalog with { Weapons = Drafts.Select(d => { d.TryBuild(out var stats, out _); return d.Saved with {
-                Stats = stats, ScenePath = d.ScenePath, GunshotSoundPath = d.GunshotSoundPath, ReloadSounds = d.BuildReloadSounds() }; }).ToList() };
+            var changed = _catalog with {
+                Weapons = Drafts.Select(d => { d.TryBuild(out var stats, out _); return d.Saved with {
+                    Id = d.Id, Name = d.Name, Category = d.Category,
+                    Stats = stats, ScenePath = d.ScenePath, GunshotSoundPath = d.GunshotSoundPath,
+                    GunshotVolumePercent = double.Parse(d.GunshotVolume, CultureInfo.InvariantCulture), ReloadSounds = d.BuildReloadSounds() }; }).ToList(),
+                Throwables = ThrowableDrafts.Select(d => { d.TryBuild(out var definition, out _); return definition; }).ToList()
+            };
             _store.Save(changed);
             _catalog = changed;
             for (int i = 0; i < Drafts.Count; i++) Drafts[i].Accept(changed.Weapons[i]);
-            if (Current != null) Select(Current);
+            for (int i = 0; i < ThrowableDrafts.Count; i++) ThrowableDrafts[i].Accept(changed.Throwables[i]);
+            if (ThrowablesMode)
+            {
+                if (CurrentThrowable != null) SelectThrowableById(CurrentThrowable.Id);
+            }
+            else if (Current != null) Select(Current);
             SetStatus($"保存成功 · {DateTime.Now:HH:mm:ss}   游戏下次启动读取新配置。", false);
             return true;
         }
         catch (Exception error) { SetStatus("保存失败：" + error.Message, true); return false; }
     }
 
-    internal void ResetCurrent() { if (Current != null) { Current.Reset(); Select(Current); } }
+    internal void ResetCurrent()
+    {
+        if (Current == null) return;
+        if (Current.IsNew)
+        {
+            int index = Drafts.IndexOf(Current);
+            Drafts.Remove(Current);
+            RebuildWeaponList();
+            SelectById(Drafts[Math.Max(0, index - 1)].Id);
+            SetStatus("已取消新增武器。", false);
+        }
+        else { Current.Reset(); Select(Current); }
+    }
     internal void SetMode(FireMode mode) => _mode.SelectedIndex = mode == FireMode.Automatic ? 1 : 0;
     internal void CloseForTest() { _skipClose = true; Close(); }
 

@@ -1,0 +1,51 @@
+{
+  "palette": {
+    "green": "#667B65",
+    "darkgreen": "#3D5148",
+    "charcoal": "#303A3C",
+    "steel": "#9BAAA9",
+    "ochre": "#D4AD61",
+    "light": "#FFE8AF"
+  },
+  "models": [
+    {
+      "id": "trash_bin",
+      "name": "垃圾桶",
+      "subtitle": "带轮桶身 / 独立翻盖",
+      "triangles": 652,
+      "materials": 5,
+      "dimensions": [
+        0.714,
+        1.074,
+        0.816
+      ],
+      "file": "models/trash_bin.glb"
+    },
+    {
+      "id": "chain_link_fence",
+      "name": "铁丝网",
+      "subtitle": "3 m 模块 / 实体菱形网格",
+      "triangles": 884,
+      "materials": 4,
+      "dimensions": [
+        3.24,
+        2.3,
+        0.26
+      ],
+      "file": "models/chain_link_fence.glb"
+    },
+    {
+      "id": "street_lamp",
+      "name": "路灯",
+      "subtitle": "4 m 弯臂 / 暖色灯罩",
+      "triangles": 528,
+      "materials": 5,
+      "dimensions": [
+        0.4,
+        4.107,
+        1.69
+      ],
+      "file": "models/street_lamp.glb"
+    }
+  ]
+}

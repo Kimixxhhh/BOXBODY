@@ -5,7 +5,7 @@
 
 [sub_resource type="CapsuleShape3D" id="Capsule"]
 radius = 0.34
-height = 1.65
+height = 2.05
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1")
@@ -14,7 +14,7 @@ collision_mask = 1
 floor_snap_length = 0.2
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-position = Vector3(0, 0.825, 0)
+position = Vector3(0, 1.025, 0)
 shape = SubResource("Capsule")
 
 [node name="Visual" type="Node3D" parent="."]

@@ -17,7 +17,26 @@ internal static partial class WorkbenchTests
         string temp = Path.Combine(Path.GetTempPath(), "FieldKitWorkbenchTest-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);
         string path = Path.Combine(temp, "weapons.json");
-        File.Copy(Path.Combine(project, "data", "weapons.json"), path);
+        // Use a controlled temporary fixture so user tuning and newly added weapons
+        // do not invalidate the editor's baseline checks. The real catalog is read-only.
+        var source = new WeaponCatalogStore(Path.Combine(project, "data", "weapons.json")).Load();
+        var sourceWeapon = source.Get("ak47");
+        var fixture = source with {
+            Weapons = new() { sourceWeapon with {
+                Stats = sourceWeapon.Stats with { ReloadDuration = WeaponStats.DefaultReloadDuration } } },
+            // Keep the throwable baseline independent of the designer's current
+            // gameplay tuning in the real catalog, just like the weapon fixture.
+            Throwables = new() {
+                new ThrowableDefinition {
+                    Id = "grenade", Name = "手雷", Category = "投掷物",
+                    Price = 600, SlotCapacity = 3, Damage = 120, Range = 4.5, EnemySlowPercent = 50,
+                    SlowDuration = 3, KnockbackSpeed = 8, FuseTime = 2.5,
+                    ItemScenePath = "res://assets/weapons/throwables/grenade.glb",
+                    ExplosionSoundPath = "res://assets/sfx/weapons/explosion/explosion_grenade_1.wav"
+                }
+            }
+        };
+        File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(fixture, WeaponCatalogStore.JsonOptions));
         var log = new List<string>();
         int exit = 0;
         app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -31,7 +50,7 @@ internal static partial class WorkbenchTests
         window.Loaded += async (_, _) => {
             try
             {
-                Check(window.Drafts.Count == 1 && window.Drafts[0].Saved.Id == "ak47" && window.Inputs.Count == 14 && window.ResourceInputs.Count == 1,
+                Check(window.Drafts.Count == 1 && window.Drafts[0].Saved.Id == "ak47" && window.Inputs.Count == 16 && window.ResourceInputs.Count == 1,
                     "Only AK47 remains, with scene configuration and no icon field");
                 foreach (var draft in window.Drafts)
                     Check(File.Exists(WeaponResources.Resolve(project, draft.Saved.ScenePath)), $"Scene resolves: {draft.Saved.Id}");
@@ -40,16 +59,24 @@ internal static partial class WorkbenchTests
                     "Native 3D viewport loads geometry from the configured scene: " + window.ModelPreview.Status);
                 Check(!window.IsDirty && !window.CanSave, "Opening editor does not modify configuration");
                 Check(window.Inputs["reloadDuration"].Text == "2.65", "Reload duration defaults to the original 2.65 seconds");
-                foreach (string bad in new[] { "0", "-1", "0.0001", "3601", "NaN", "Infinity", "" })
+                Check(window.Inputs["equipDuration"].Text == "0.35" && window.Inputs["holsterDuration"].Text == "0.25",
+                    "Draw and holster timings default to 0.35 and 0.25 seconds");
+                foreach (string field in new[] { "reloadDuration", "equipDuration", "holsterDuration" })
                 {
-                    window.Inputs["reloadDuration"].Text = bad;
-                    Check(!window.CanSave && !window.SaveAll(), "Invalid reload duration is rejected: " + bad);
+                    foreach (string bad in new[] { "0", "-1", "0.0001", "3601", "NaN", "Infinity", "" })
+                    {
+                        window.Inputs[field].Text = bad;
+                        Check(!window.CanSave && !window.SaveAll(), $"Invalid {field} is rejected: {bad}");
+                    }
+                    window.Inputs[field].Text = field == "reloadDuration" ? "2.65" : field == "equipDuration" ? "0.35" : "0.25";
                 }
                 window.Inputs["reloadDuration"].Text = "1.325";
                 Check(window.IsDirty && window.CanSave, "A reload-duration-only edit enables saving");
                 window.ResetCurrent();
                 Check(!window.IsDirty && window.Inputs["reloadDuration"].Text == "2.65", "Revert restores the saved reload duration");
                 window.Inputs["reloadDuration"].Text = "1.325";
+                window.Inputs["equipDuration"].Text = "0.45";
+                window.Inputs["holsterDuration"].Text = "0.3";
                 Check(window.AmmoTypeInput.SelectedValue is AmmoType.Medium, "AK47 uses medium ammunition in the editor");
                 window.AmmoTypeInput.SelectedIndex = -1;
                 Check(!window.CanSave && !window.SaveAll(), "Missing ammunition selection blocks saving");
@@ -124,9 +151,10 @@ internal static partial class WorkbenchTests
                 var stats = saved.Get("ak47").Stats;
                 Check(stats.AmmoType == AmmoType.Medium && stats.Price == 1750 && stats.Damage == 45.25 && stats.EnemySlowPercent == 25 && stats.KnockbackSpeed == 3.5 &&
                     stats.FireCooldown == .2 && stats.FireMode == FireMode.SemiAuto && stats.MagazineCapacity == 42 && stats.ReloadDuration == 1.325 &&
+                    stats.EquipDuration == .45 && stats.HolsterDuration == .3 &&
                     stats.MovementInertiaPercent == 20 && stats.ProjectileSpeed == 150 && stats.SpreadMin == 2 &&
                     stats.SpreadMax == 10 && stats.SpreadPerShot == 1.5 && stats.SpreadRecovery == 3 && stats.TurnFollowSpeed == 12.5,
-                    "All 16 tuning properties including reload duration survive disk round trip");
+                    "All 16 tuning properties including reload, draw and holster timings survive disk round trip");
                 Check(saved.Get("ak47").ScenePath == "res://assets/weapons/rifle/AK47.glb" && !File.ReadAllText(path).Contains("iconPath"),
                     "Scene survives disk round trip without any icon field");
                 Check(System.Text.Json.JsonSerializer.Serialize(new WeaponCatalogStore(path + ".bak").Load().Get("ak47"), WeaponCatalogStore.JsonOptions) ==
@@ -160,6 +188,9 @@ internal static partial class WorkbenchTests
                 string good = File.ReadAllText(path);
                 Check(WeaponCatalogStore.Parse(good.Replace("\"reloadDuration\": 1.325,", "")).Get("ak47").Stats.ReloadDuration == 2.65,
                     "Older catalogs without reload duration retain the original timing");
+                Check(WeaponCatalogStore.Parse(good.Replace("\"equipDuration\": 0.45,", "").Replace("\"holsterDuration\": 0.3,", ""))
+                        .Get("ak47").Stats is { EquipDuration: 0.35, HolsterDuration: 0.25 },
+                    "Older catalogs without draw/holster timings keep the 0.35/0.25 defaults");
                 foreach (string bad in new[] { "0", "-1", "3601", "null" })
                 {
                     bool invalidDuration = false;
@@ -188,6 +219,8 @@ internal static partial class WorkbenchTests
                 Check(rejected, "Duplicate weapon IDs are rejected");
 
                 await VerifyAudioEditor(window, project, artifacts, Check);
+                await VerifyNewWeapons(window, path, artifacts, Check);
+                await VerifyThrowables(window, path, artifacts, Check);
 
                 // Render a fresh, unchanged editor view against the actual catalog.
                 var preview = new MainWindow(Path.Combine(project, "data", "weapons.json"));
@@ -198,12 +231,18 @@ internal static partial class WorkbenchTests
                 preview.Inputs["reloadDuration"].BringIntoView();
                 await preview.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
                 Capture(preview, Path.Combine(artifacts, "weapon-workbench-reload.png"));
+                preview.Inputs["holsterDuration"].BringIntoView();
+                await preview.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                Capture(preview, Path.Combine(artifacts, "weapon-workbench-switch.png"));
                 preview.Width = 1040; preview.Height = 700;
                 await preview.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
                 Capture(preview, Path.Combine(artifacts, "weapon-workbench-small.png"));
                 preview.Inputs["reloadDuration"].BringIntoView();
                 await preview.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
                 Capture(preview, Path.Combine(artifacts, "weapon-workbench-reload-small.png"));
+                preview.Inputs["holsterDuration"].BringIntoView();
+                await preview.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                Capture(preview, Path.Combine(artifacts, "weapon-workbench-switch-small.png"));
                 Check(preview.ActualWidth >= 1040 && preview.ActualHeight >= 700, "Editor renders at minimum supported size");
                 preview.CloseForTest();
                 log.Add($"WORKBENCH PASS: {log.Count} checks");

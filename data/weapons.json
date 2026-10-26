@@ -6,18 +6,72 @@
       "name": "AK-47",
       "category": "突击步枪",
       "scenePath": "res://scenes/weapons/AK47.tscn",
-      "gunshotSoundPath": "",
-      "reloadSounds": [],
+      "gunshotSoundPath": "res://assets/sfx/weapons/gunshot/gunshot_rifle_2.wav",
+      "gunshotVolumePercent": 50,
+      "reloadSounds": [
+        {
+          "soundPath": "res://assets/sfx/weapons/gunmisc/magazine_remove.wav",
+          "delaySeconds": 0.3,
+          "volumePercent": 100
+        },
+        {
+          "soundPath": "res://assets/sfx/weapons/gunmisc/magazine_insert.wav",
+          "delaySeconds": 1.5,
+          "volumePercent": 100
+        }
+      ],
       "stats": {
         "ammoType": "Medium",
         "price": 2500,
         "damage": 30,
         "enemySlowPercent": 20,
         "knockbackSpeed": 0,
-        "fireCooldown": 0.1,
+        "fireCooldown": 0.11,
         "fireMode": "Automatic",
         "magazineCapacity": 30,
-        "reloadDuration": 2.65,
+        "reloadDuration": 2,
+        "equipDuration": 0.35,
+        "holsterDuration": 0.25,
+        "movementInertiaPercent": 10,
+        "turnFollowSpeed": 10,
+        "projectileSpeed": 50,
+        "spreadMax": 10,
+        "spreadMin": 1,
+        "spreadPerShot": 1,
+        "spreadRecovery": 6
+      }
+    },
+    {
+      "id": "fnfal",
+      "name": "FN-FAL",
+      "category": "未分类",
+      "scenePath": "res://assets/weapons/rifle/FNFAL2.glb",
+      "gunshotSoundPath": "res://assets/sfx/weapons/gunshot/gunshot_rifle_2_heavy.wav",
+      "gunshotVolumePercent": 50,
+      "reloadSounds": [
+        {
+          "soundPath": "res://assets/sfx/weapons/gunmisc/magazine_remove.wav",
+          "delaySeconds": 0.3,
+          "volumePercent": 100
+        },
+        {
+          "soundPath": "res://assets/sfx/weapons/gunmisc/magazine_insert.wav",
+          "delaySeconds": 1.5,
+          "volumePercent": 100
+        }
+      ],
+      "stats": {
+        "ammoType": "Medium",
+        "price": 1000,
+        "damage": 30,
+        "enemySlowPercent": 0,
+        "knockbackSpeed": 0,
+        "fireCooldown": 0.15,
+        "fireMode": "SemiAuto",
+        "magazineCapacity": 20,
+        "reloadDuration": 2,
+        "equipDuration": 0.4,
+        "holsterDuration": 0.3,
         "movementInertiaPercent": 10,
         "turnFollowSpeed": 10,
         "projectileSpeed": 100,
@@ -26,6 +80,38 @@
         "spreadPerShot": 0.5,
         "spreadRecovery": 4
       }
+    }
+  ],
+  "throwables": [
+    {
+      "id": "grenade",
+      "name": "手雷",
+      "category": "投掷物",
+      "price": 300,
+      "slotCapacity": 3,
+      "damage": 120,
+      "range": 4.5,
+      "enemySlowPercent": 20,
+      "slowDuration": 0.5,
+      "knockbackSpeed": 8,
+      "fuseTime": 2,
+      "itemScenePath": "res://assets/weapons/throwables/grenade.glb",
+      "explosionSoundPath": "res://assets/sfx/weapons/explosion/explosion_grenade_1.wav"
+    },
+    {
+      "id": "concussiongrenade",
+      "name": "震撼弹",
+      "category": "投掷物",
+      "price": 500,
+      "slotCapacity": 2,
+      "damage": 1,
+      "range": 4,
+      "enemySlowPercent": 80,
+      "slowDuration": 2,
+      "knockbackSpeed": 0,
+      "fuseTime": 1.5,
+      "itemScenePath": "res://assets/weapons/throwables/flashbang.glb",
+      "explosionSoundPath": "res://assets/sfx/weapons/explosion/explosion_grenade_1.wav"
     }
   ]
 }

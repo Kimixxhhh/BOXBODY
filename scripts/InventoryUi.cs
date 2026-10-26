@@ -2,13 +2,15 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using FieldKit.Items;
+using FieldKit.Weapons;
 
-// Weapon slots and individual ammunition packs reflect the player's live inventory.
+// Weapon slots and individual small-slot items reflect the player's live inventory.
 public partial class InventoryUi : CanvasLayer
 {
     public PlayerController Player { get; set; } = null!;
+    public IReadOnlyList<ThrowableDefinition> Throwables { get; set; } = Array.Empty<ThrowableDefinition>();
     public bool IsOpen => _root.Visible;
-    public int SlotCount => AmmoBackpack.Capacity;
+    public int SlotCount => ItemBackpack.Capacity;
     public event Action<bool>? OpenChanged;
     private Control _root = null!;
     private Control _layout = null!;
@@ -19,13 +21,13 @@ public partial class InventoryUi : CanvasLayer
     private Label _money = null!;
     private Label _storageCount = null!;
     private readonly Label?[] _magazines = new Label?[PlayerController.WeaponSlotCount];
-    private readonly Button[] _itemSlots = new Button[AmmoBackpack.Capacity];
-    private readonly Label[] _itemNames = new Label[AmmoBackpack.Capacity];
-    private readonly Label[] _itemAmounts = new Label[AmmoBackpack.Capacity];
-    private readonly InventoryIcon[] _itemIcons = new InventoryIcon[AmmoBackpack.Capacity];
-    private readonly TextureRect[] _itemTextures = new TextureRect[AmmoBackpack.Capacity];
+    private readonly Button[] _itemSlots = new Button[ItemBackpack.Capacity];
+    private readonly Label[] _itemNames = new Label[ItemBackpack.Capacity];
+    private readonly Label[] _itemAmounts = new Label[ItemBackpack.Capacity];
+    private readonly InventoryIcon[] _itemIcons = new InventoryIcon[ItemBackpack.Capacity];
+    private readonly TextureRect[] _itemTextures = new TextureRect[ItemBackpack.Capacity];
     private readonly Dictionary<string, WeaponModelPreview> _itemPreviews = new();
-    private AmmoItem? _draggedItem;
+    private IBackpackItem? _draggedItem;
     private int _dragSource = -1;
     private int _dragToken;
     private static readonly Color PanelColor = new(0.08f, 0.1f, 0.105f, 0.97f);
@@ -59,6 +61,7 @@ public partial class InventoryUi : CanvasLayer
         Rule(_layout, 0, 54, 1120, Border);
         RefreshWeapons();
         Player.LoadoutChanged += RefreshWeapons;
+        Player.GrenadeStateChanged += RefreshWeapons;
         BuildStorage();
         foreach (var item in ItemCatalog.Ammunition)
         {
@@ -67,6 +70,14 @@ public partial class InventoryUi : CanvasLayer
             AddChild(preview);
             preview.Initialize(item.IconScenePath, new Vector2I(384, 256), new Vector3(0, 1.6f, 1));
             _itemPreviews[item.Id] = preview;
+        }
+        foreach (var throwable in Throwables)
+        {
+            if (string.IsNullOrEmpty(throwable.ItemScenePath) || _itemPreviews.ContainsKey(throwable.Id)) continue;
+            var preview = new WeaponModelPreview { Name = "ItemPreview_" + throwable.Id };
+            AddChild(preview);
+            preview.Initialize(throwable.ItemScenePath, new Vector2I(384, 256), new Vector3(1.2f, 1.3f, 1.2f));
+            _itemPreviews[throwable.Id] = preview;
         }
         _hint = Text(_layout, DefaultHint, 100, 627, 700, 28, 14, Muted);
         RefreshContents();
@@ -93,6 +104,7 @@ public partial class InventoryUi : CanvasLayer
     public override void _ExitTree()
     {
         Player.LoadoutChanged -= RefreshWeapons;
+        Player.GrenadeStateChanged -= RefreshWeapons;
         Player.InventoryChanged -= RefreshContents;
     }
 
@@ -105,10 +117,10 @@ public partial class InventoryUi : CanvasLayer
         for (int i = 0; i < SlotCount; i++)
         {
             var item = Player.Backpack.Slots[i];
-            _itemNames[i].Text = item?.Definition.Name ?? "";
-            _itemAmounts[i].Text = item == null ? "" : $"{item.RemainingAmmo} / {item.TotalAmmo}";
+            _itemNames[i].Text = item?.Name ?? "";
+            _itemAmounts[i].Text = item?.AmountText ?? "";
             _itemIcons[i].Visible = item == null;
-            _itemTextures[i].Texture = item != null && _itemPreviews.TryGetValue(item.Definition.Id, out var preview) ? preview.GetTexture() : null;
+            _itemTextures[i].Texture = item != null && _itemPreviews.TryGetValue(item.Id, out var preview) ? preview.GetTexture() : null;
             _itemTextures[i].Visible = item != null;
             _itemSlots[i].TooltipText = StorageHint(i);
         }
@@ -121,14 +133,16 @@ public partial class InventoryUi : CanvasLayer
         ? $"{Player.MagazineAmmo(slot)} / {weapon.Stats.MagazineCapacity}" : "— / —";
 
     private string StorageHint(int slot) => Player.Backpack.Slots[slot] is { } item
-        ? $"{item.Definition.Name} · 总弹药量 {item.TotalAmmo} 发 · 剩余弹药量 {item.RemainingAmmo} 发"
+        ? $"{item.HoverText} · 物品栏 {slot + 1:00}"
         : $"物品栏 {slot + 1:00} · 空栏位";
 
     private void BuildWeaponCard(float x, int index)
     {
         var weapon = Player.WeaponSlots[index];
         bool equipped = weapon != null;
-        bool active = Player.ActiveWeaponSlot == index;
+        bool grenadeOut = Player.IsGrenadeBusy;
+        bool active = Player.ActiveWeaponSlot == index && !grenadeOut;
+        bool holstered = equipped && Player.ActiveWeaponSlot == index && grenadeOut;
         var card = new Panel { Name = index == 0 ? "PrimaryWeapon" : "SecondaryWeapon" };
         Place(_layout, card, x, 76, 540, 280);
         _weaponCards.Add(card);
@@ -139,8 +153,9 @@ public partial class InventoryUi : CanvasLayer
         Text(badge, (index + 1).ToString(), 0, 0, 28, 28, 17,
             active ? WellColor : Colors.White, HorizontalAlignment.Center);
         Text(card, "武器", 58, 18, 100, 28, 17);
-        Text(card, active ? "持用中" : equipped ? "已装备" : "未装备", 400, 18, 118, 28, 13,
+        var stateLabel = Text(card, active ? "持用中" : holstered ? "已收回" : equipped ? "已装备" : "未装备", 400, 18, 118, 28, 13,
             equipped ? Accent : Muted, HorizontalAlignment.Right);
+        stateLabel.Name = "WeaponState";
         Rule(card, 20, 57, 500, new Color(0.2f, 0.25f, 0.25f));
         if (weapon != null)
         {
@@ -226,8 +241,8 @@ public partial class InventoryUi : CanvasLayer
         card.AddThemeStyleboxOverride("panel", Box(PanelColor, Accent, 4));
         Place(card, new TextureRect { Texture = _itemTextures[slot].Texture, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, MouseFilter = Control.MouseFilterEnum.Ignore }, 18, 3, 70, 40);
-        Text(card, item.Definition.Name, 4, 42, 97, 19, 13, Colors.White, HorizontalAlignment.Center);
-        Text(card, $"{item.RemainingAmmo} / {item.TotalAmmo}", 4, 61, 97, 18, 13, Accent, HorizontalAlignment.Center);
+        Text(card, item.Name, 4, 42, 97, 19, 13, Colors.White, HorizontalAlignment.Center);
+        Text(card, item.AmountText, 4, 61, 97, 18, 13, Accent, HorizontalAlignment.Center);
         preview.Theme = _root.Theme;
         _itemSlots[slot].SetDragPreview(preview);
         return new Godot.Collections.Dictionary { { "inventory", this }, { "token", _dragToken } };

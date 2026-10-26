@@ -10,13 +10,15 @@ public sealed class ReloadSoundDraft
 {
     public string SoundPath { get; set; } = "";
     public string Delay { get; set; } = "0";
+    public string Volume { get; set; } = "100";
 }
 
-internal sealed record ReloadSoundRow(TextBox Path, TextBox Delay, Button Remove, TextBlock Message);
+internal sealed record ReloadSoundRow(TextBox Path, TextBox Delay, TextBox Volume, Button Remove, TextBlock Message);
 
 public sealed partial class MainWindow
 {
     internal readonly TextBox GunshotInput = new() { FontSize = 12, Height = 34 };
+    internal readonly TextBox GunshotVolumeInput = new() { FontSize = 12, Height = 34, Width = 120, HorizontalAlignment = HorizontalAlignment.Left };
     internal readonly List<ReloadSoundRow> ReloadSoundRows = new();
     internal Border AudioCard { get; private set; } = null!;
     private readonly StackPanel _reloadSoundRows = new();
@@ -35,7 +37,13 @@ public sealed partial class MainWindow
         var clear = SmallButton("清空"); clear.Click += (_, _) => GunshotInput.Text = "";
         DockPanel.SetDock(clear, Dock.Right); gunshotRow.Children.Add(clear);
         AddAudioBrowseButton(gunshotRow, GunshotInput);
-        gunshotRow.Children.Add(GunshotInput); content.Children.Add(gunshotRow); content.Children.Add(_gunshotMessage);
+        gunshotRow.Children.Add(GunshotInput); content.Children.Add(gunshotRow);
+        var volumeLabel = Label("枪声音量 · %", 10, Muted); volumeLabel.Margin = new Thickness(0,10,0,5);
+        content.Children.Add(volumeLabel); content.Children.Add(GunshotVolumeInput); content.Children.Add(_gunshotMessage);
+        GunshotVolumeInput.TextChanged += (_, _) => {
+            if (_binding || Current == null) return;
+            Current.GunshotVolume = GunshotVolumeInput.Text.Trim(); RefreshState();
+        };
         GunshotInput.TextChanged += (_, _) => {
             if (_binding || Current == null) return;
             Current.GunshotSoundPath = GunshotInput.Text.Trim(); RefreshState();
@@ -46,7 +54,7 @@ public sealed partial class MainWindow
         DockPanel.SetDock(add, Dock.Right); reloadHeader.Children.Add(add);
         var reloadTitle = Label("换弹音效列表", 12, Ink, FontWeights.SemiBold);
         reloadTitle.VerticalAlignment = VerticalAlignment.Center; reloadHeader.Children.Add(reloadTitle); content.Children.Add(reloadHeader);
-        var help = Label("延迟从换弹开始计算，单位为秒；0 表示立即播放。相同延迟可同时播放，切换武器会取消换弹音效。", 11, Muted);
+        var help = Label("延迟从换弹开始计算，0 秒为立即播放；相同延迟可同时播放。每条音效的音量独立调整：0% 静音，100% 原音量，最高 200%。切换武器会取消换弹音效。", 11, Muted);
         help.TextWrapping = TextWrapping.Wrap; help.Margin = new Thickness(0,8,0,10); help.LineHeight = 20;
         content.Children.Add(help); content.Children.Add(_reloadSoundRows);
     }
@@ -95,21 +103,26 @@ public sealed partial class MainWindow
             DockPanel.SetDock(remove, Dock.Right); header.Children.Add(remove);
             var label = Label($"音效 {ReloadSoundRows.Count + 1}", 12, Ink, FontWeights.SemiBold);
             label.VerticalAlignment = VerticalAlignment.Center; header.Children.Add(label); body.Children.Add(header);
-            var grid = new Grid(); grid.ColumnDefinitions.Add(new ColumnDefinition());
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) }); body.Children.Add(grid);
-            var pathPanel = new StackPanel(); pathPanel.Children.Add(Label("音效文件", 10, Muted)); grid.Children.Add(pathPanel);
+            var pathPanel = new StackPanel(); pathPanel.Children.Add(Label("音效文件", 10, Muted)); body.Children.Add(pathPanel);
             var row = new DockPanel { Margin = new Thickness(0,5,0,0) };
             var path = new TextBox { Text = cue.SoundPath, FontSize = 12, Height = 34 };
             AddAudioBrowseButton(row, path); row.Children.Add(path); pathPanel.Children.Add(row);
-            var delayPanel = new StackPanel { Margin = new Thickness(14,0,0,0) };
-            Grid.SetColumn(delayPanel, 1); grid.Children.Add(delayPanel);
+            var grid = new Grid { Margin = new Thickness(0,10,0,0) }; grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.ColumnDefinitions.Add(new ColumnDefinition()); body.Children.Add(grid);
+            var delayPanel = new StackPanel { Margin = new Thickness(0,0,14,0) };
+            grid.Children.Add(delayPanel);
             delayPanel.Children.Add(Label("播放延迟 · 秒", 10, Muted));
             var delay = new TextBox { Text = cue.Delay, Height = 34, Margin = new Thickness(0,5,0,0), ToolTip = "从换弹开始计算，0 为立即播放" };
             delayPanel.Children.Add(delay);
+            var volumePanel = new StackPanel(); Grid.SetColumn(volumePanel, 1); grid.Children.Add(volumePanel);
+            volumePanel.Children.Add(Label("音量 · %", 10, Muted));
+            var volume = new TextBox { Text = cue.Volume, Height = 34, Margin = new Thickness(0,5,0,0), ToolTip = "0–200%；0 静音，100 原音量" };
+            volumePanel.Children.Add(volume);
             var message = Label("", 10, Muted); message.TextWrapping = TextWrapping.Wrap; message.Margin = new Thickness(0,5,0,0);
-            body.Children.Add(message); ReloadSoundRows.Add(new ReloadSoundRow(path, delay, remove, message));
+            body.Children.Add(message); ReloadSoundRows.Add(new ReloadSoundRow(path, delay, volume, remove, message));
             path.TextChanged += (_, _) => { if (!_binding) { cue.SoundPath = path.Text.Trim(); RefreshState(); } };
             delay.TextChanged += (_, _) => { if (!_binding) { cue.Delay = delay.Text.Trim(); RefreshState(); } };
+            volume.TextChanged += (_, _) => { if (!_binding) { cue.Volume = volume.Text.Trim(); RefreshState(); } };
             remove.Click += (_, _) => { Current?.ReloadSounds.Remove(cue); RebuildReloadSoundRows(); RefreshState(); };
         }
     }
@@ -117,17 +130,22 @@ public sealed partial class MainWindow
     private void RefreshAudioState(Dictionary<string, string> errors)
     {
         bool bad = errors.TryGetValue("gunshotSoundPath", out string? error);
+        bool badVolume = errors.TryGetValue("gunshotVolume", out string? volumeError);
         GunshotInput.BorderBrush = bad ? Error : Line;
-        _gunshotMessage.Foreground = bad ? Error : Muted;
-        _gunshotMessage.Text = bad ? error! : "WAV / OGG / MP3；留空表示不播放枪声。";
+        GunshotVolumeInput.BorderBrush = badVolume ? Error : Line;
+        _gunshotMessage.Foreground = bad || badVolume ? Error : Muted;
+        _gunshotMessage.Text = bad || badVolume ? string.Join(" ", new[] { error, volumeError }.Where(s => s != null))
+            : "WAV / OGG / MP3；留空不播放枪声。音量 0–200%；0% 静音，100% 原音量。";
         for (int i = 0; i < ReloadSoundRows.Count; i++)
         {
             var row = ReloadSoundRows[i];
             bool badPath = errors.TryGetValue($"reloadSound:{i}", out string? pathError);
             bool badDelay = errors.TryGetValue($"reloadDelay:{i}", out string? delayError);
+            bool badCueVolume = errors.TryGetValue($"reloadVolume:{i}", out string? cueVolumeError);
             row.Path.BorderBrush = badPath ? Error : Line; row.Delay.BorderBrush = badDelay ? Error : Line;
-            row.Message.Foreground = badPath || badDelay ? Error : Muted;
-            row.Message.Text = badPath || badDelay ? string.Join(" ", new[] { pathError, delayError }.Where(s => s != null)) : "在换弹开始后的指定时刻播放一次。";
+            row.Volume.BorderBrush = badCueVolume ? Error : Line;
+            row.Message.Foreground = badPath || badDelay || badCueVolume ? Error : Muted;
+            row.Message.Text = badPath || badDelay || badCueVolume ? string.Join(" ", new[] { pathError, delayError, cueVolumeError }.Where(s => s != null)) : "在换弹开始后的指定时刻播放一次。";
         }
     }
 }
